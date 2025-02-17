@@ -1,0 +1,331 @@
+/**
+ * Copyright 2000-present Liferay, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package com.zen.asr.portlet;
+
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+
+import javax.portlet.Portlet;
+import javax.portlet.PortletException;
+import javax.portlet.RenderRequest;
+import javax.portlet.RenderResponse;
+import javax.portlet.ResourceRequest;
+import javax.portlet.ResourceResponse;
+
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
+
+import com.liferay.portal.kernel.dao.orm.Disjunction;
+import com.liferay.portal.kernel.dao.orm.DynamicQuery;
+import com.liferay.portal.kernel.dao.orm.OrderFactoryUtil;
+import com.liferay.portal.kernel.dao.orm.ProjectionFactoryUtil;
+import com.liferay.portal.kernel.dao.orm.RestrictionsFactoryUtil;
+import com.liferay.portal.kernel.exception.SystemException;
+import com.liferay.portal.kernel.json.JSONArray;
+import com.liferay.portal.kernel.json.JSONFactoryUtil;
+import com.liferay.portal.kernel.json.JSONObject;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.portlet.bridges.mvc.MVCPortlet;
+import com.liferay.portal.kernel.theme.ThemeDisplay;
+import com.liferay.portal.kernel.util.ContentTypes;
+import com.liferay.portal.kernel.util.ParamUtil;
+import com.liferay.portal.kernel.util.StringUtil;
+import com.liferay.portal.kernel.util.Validator;
+import com.liferay.portal.kernel.util.WebKeys;
+import com.zen.asr.constants.MERecommendationPortletKeys;
+
+import zen.me.portal.common.api.ZenMeRecommendationApi;
+import zen.me.service.constant.ManagerUpType;
+import zen.me.service.constant.UserDetailsFilterColumn;
+import zen.me.service.model.UserDetails;
+import zen.me.service.service.UserDetailsLocalServiceUtil;
+
+@Component(immediate = true, property = { "com.liferay.portlet.display-category=ME Portal",
+		"com.liferay.portlet.instanceable=true", "javax.portlet.init-param.template-path=/",
+		"javax.portlet.resource-bundle=content.Language", "javax.portlet.display-name=Associate List View Portlet",
+		"javax.portlet.name=" + MERecommendationPortletKeys.MEASSOCIATE_LIST,
+		"javax.portlet.security-role-ref=power-user,user", "com.liferay.portlet.requires-namespaced-parameters=false",
+		"com.liferay.portlet.footer-portlet-javascript=/js/associateList.js",
+		"javax.portlet.init-param.view-template=/zenmeassociatelistportlet/view.jsp" }, service = Portlet.class)
+public class ZenMeAssociateListPortlet extends MVCPortlet {
+
+	private static Log logger = LogFactoryUtil.getLog(ZenMeAssociateListPortlet.class);
+
+	@Override
+	public void doView(RenderRequest renderRequest, RenderResponse renderResponse)
+			throws IOException, PortletException {
+		super.doView(renderRequest, renderResponse);
+	}
+
+	@Override
+	public void serveResource(ResourceRequest resourceRequest, ResourceResponse resourceResponse)
+			throws IOException, PortletException {
+
+		logger.info("Executing serveResource method!");
+
+		ThemeDisplay themeDisplay = (ThemeDisplay) resourceRequest.getAttribute(WebKeys.THEME_DISPLAY);
+
+		String action = ParamUtil.getString(resourceRequest, "action", null);
+		JSONObject finalJsonObject = JSONFactoryUtil.createJSONObject();
+		JSONArray jsonArray = JSONFactoryUtil.createJSONArray();
+		String country = ParamUtil.getString(resourceRequest, "country", null);
+		int managerUPType = ParamUtil.getInteger(resourceRequest, "type");
+		String employeeId = themeDisplay.getUser().getJobTitle();
+		if (themeDisplay.isSignedIn()) {
+
+			if (StringUtil.equalsIgnoreCase(action, "loadUserDetails")) {
+
+				String promotion = ParamUtil.getString(resourceRequest, "promotion", null);
+				String grade = ParamUtil.getString(resourceRequest, "grade", null);
+				String topTalent = ParamUtil.getString(resourceRequest, "topTalent", null);
+				String top100 = ParamUtil.getString(resourceRequest, "top100", null);
+				logger.info("top100 " + top100);
+				String criticalTalent = ParamUtil.getString(resourceRequest, "criticalTalent", null);
+				String gender = ParamUtil.getString(resourceRequest, "gender", null);
+				String performerType = ParamUtil.getString(resourceRequest, "performerType", null);
+				String vbu = ParamUtil.getString(resourceRequest, "vbu", null);
+				String serviceLine = ParamUtil.getString(resourceRequest, "serviceLine", null);
+				String customer = ParamUtil.getString(resourceRequest, "customer", null);
+				String project = ParamUtil.getString(resourceRequest, "project", null);
+				String payroll = ParamUtil.getString(resourceRequest, "payroll", null);
+				String mtOrLateral = ParamUtil.getString(resourceRequest, "mtOrLateral", null);
+
+				List<UserDetails> lstObj = UserDetailsLocalServiceUtil.getFilterData(Long.parseLong(employeeId),
+						country, managerUPType, _zenMeRecommendationApi.bridgeList(grade), topTalent, criticalTalent,
+						gender, promotion, _zenMeRecommendationApi.bridgeList(performerType),
+						_zenMeRecommendationApi.bridgeList(vbu), _zenMeRecommendationApi.bridgeList(serviceLine),
+						_zenMeRecommendationApi.bridgeList(customer), _zenMeRecommendationApi.bridgeList(project),
+						mtOrLateral,top100);
+				List<UserDetails> userData = UserDetailsLocalServiceUtil.getAssocitesList(managerUPType,
+						Long.parseLong(employeeId), country, 0);
+
+				if (Validator.isNotNull(lstObj) && lstObj.size() > 0) {
+					try {
+						for (UserDetails users : lstObj) {
+							if (Validator.isNotNull(users)) {
+								JSONObject jsonObject = JSONFactoryUtil.createJSONObject();
+								jsonObject.put("associateName", users.getAssociateName());
+								jsonObject.put("associateId", users.getAssociateId());
+								jsonObject.put("grade", users.getCurrentGrade());
+								jsonObject.put("projectName", users.getProjectName());
+								jsonObject.put("customerName", users.getCustomerName());
+								// jsonObject.put("BU", users.getBandUpperLimitSalary());
+								jsonObject.put("VBU", users.getCompanyRecoVBU());
+								jsonObject.put("practices", users.getPractice());
+
+								jsonArray.put(jsonObject);
+							}
+						}
+
+					} catch (SystemException e) {
+						e.printStackTrace();
+					}
+				}
+
+				finalJsonObject.put("userDetails", jsonArray);
+				finalJsonObject.put("isFilterApplied", userData.size() == jsonArray.length() ? false : true);
+				PrintWriter printWriter = null;
+				try {
+					printWriter = resourceResponse.getWriter();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+				resourceResponse.setContentType(ContentTypes.APPLICATION_JSON);
+				if (Validator.isNotNull(printWriter)) {
+					printWriter.println(finalJsonObject.toJSONString());
+				}
+				printWriter.close();
+			} else if (StringUtil.equalsIgnoreCase(action, "loadUPType")) {
+				JSONArray countries = JSONFactoryUtil.createJSONArray();
+				List<String> countriesList = getCountryListByManager(
+						Long.parseLong(themeDisplay.getUser().getJobTitle()));
+				if (Validator.isNotNull(countriesList)) {
+					countriesList.forEach(c -> {
+						countries.put(c);
+					});
+				}
+
+				try {
+					if (Validator.isBlank(country) || Validator.isNull(country)) {
+						country = countriesList.get(0);
+					}
+				} catch (Exception e1) {
+				}
+				long firstUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(Long.parseLong(employeeId),
+						ManagerUpType.FIRST_UP_MANSGER, country);
+				long secounUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(Long.parseLong(employeeId),
+						ManagerUpType.SECOND_UP_MANSGER, country);
+				long thirdUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(Long.parseLong(employeeId),
+						ManagerUpType.THIRD_UP_MANSGER, country);
+				long fourthUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(Long.parseLong(employeeId),
+						ManagerUpType.FOURTH_UP_MANSGER, country);
+				JSONArray data = JSONFactoryUtil.createJSONArray();
+				JSONArray replicateArray = JSONFactoryUtil.createJSONArray();
+
+				JSONObject object = JSONFactoryUtil.createJSONObject();
+				object.put("key", 0);
+				object.put("data", "TR");
+
+				replicateArray.put(object);
+				if (firstUpCount > 0) {
+					object = JSONFactoryUtil.createJSONObject();
+					object.put("key", 1);
+					object.put("data", "1Up");
+					data.put(object);
+					replicateArray.put(object);
+				}
+				if (secounUpCount > 0) {
+					object = JSONFactoryUtil.createJSONObject();
+					object.put("key", 2);
+					object.put("data", "2Up");
+					data.put(object);
+					replicateArray.put(object);
+				}
+
+				if (thirdUpCount > 0) {
+					object = JSONFactoryUtil.createJSONObject();
+					object.put("key", 3);
+					object.put("data", "3Up");
+					data.put(object);
+					replicateArray.put(object);
+				}
+				if (fourthUpCount > 0) {
+					object = JSONFactoryUtil.createJSONObject();
+					object.put("key", 4);
+					object.put("data", "4Up");
+					data.put(object);
+					replicateArray.put(object);
+				}
+
+				// List<String> countriesList = UserDetailsLocalServiceUtil.getCountry();
+
+				finalJsonObject.put("countriesList", countriesList);
+				finalJsonObject.put("managerUPAccessArray", data);
+				PrintWriter printWriter = null;
+				try {
+					printWriter = resourceResponse.getWriter();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+				resourceResponse.setContentType(ContentTypes.APPLICATION_JSON);
+				if (Validator.isNotNull(printWriter)) {
+					printWriter.println(finalJsonObject.toJSONString());
+				}
+				printWriter.close();
+			} else if (StringUtil.equalsIgnoreCase(action, "loadFilters")) {
+				int type = ParamUtil.getInteger(resourceRequest, "type", 1);
+				// String country = ParamUtil.getString(resourceRequest, "country", "India");
+				if (Validator.isBlank(country) || Validator.isNull(country)) {
+					country = "India";
+				}
+
+				List<String> grades = UserDetailsLocalServiceUtil.getFilterData(Long.parseLong(employeeId), type,
+						UserDetailsFilterColumn.CURRENT_GRADE, country);
+				if (Validator.isNotNull(grades))
+					Collections.sort(grades);
+				finalJsonObject.put("currentGrade", _zenMeRecommendationApi.bridgeStringJSON(grades));
+
+				List<String> performerTypes = UserDetailsLocalServiceUtil.getFilterData(
+						Long.parseLong(themeDisplay.getUser().getJobTitle()), type,
+						UserDetailsFilterColumn.PERFORMER_TYPE, country);
+				if (Validator.isNotNull(performerTypes))
+					Collections.sort(performerTypes);
+				finalJsonObject.put("performerTypes", _zenMeRecommendationApi.bridgeStringJSON(performerTypes));
+
+				List<String> vbuArray = UserDetailsLocalServiceUtil.getFilterData(Long.parseLong(employeeId), type,
+						UserDetailsFilterColumn.COMP_RECO_VBU, country);
+				if (Validator.isNotNull(vbuArray))
+					Collections.sort(vbuArray);
+				finalJsonObject.put("vbuArray", _zenMeRecommendationApi.bridgeStringJSON(vbuArray));
+
+				List<String> serviceLineArray = UserDetailsLocalServiceUtil.getFilterData(Long.parseLong(employeeId),
+						type, UserDetailsFilterColumn.PRACTICE, country);
+				if (Validator.isNotNull(serviceLineArray))
+					Collections.sort(serviceLineArray);
+				finalJsonObject.put("serviceLineArray", _zenMeRecommendationApi.bridgeStringJSON(serviceLineArray));
+
+				List<String> customerArray = UserDetailsLocalServiceUtil.getFilterData(Long.parseLong(employeeId), type,
+						UserDetailsFilterColumn.Customer_Name, country);
+				if (Validator.isNotNull(customerArray))
+					Collections.sort(customerArray);
+				finalJsonObject.put("customerArray", _zenMeRecommendationApi.bridgeStringJSON(customerArray));
+
+				List<String> projectArray = UserDetailsLocalServiceUtil.getFilterData(Long.parseLong(employeeId), type,
+						UserDetailsFilterColumn.Project_Name, country);
+				if (Validator.isNotNull(projectArray))
+					Collections.sort(projectArray);
+				finalJsonObject.put("projectArray", _zenMeRecommendationApi.bridgeStringJSON(projectArray));
+
+//				List<String> mtOrLateralArray = UserDetailsLocalServiceUtil.getFilterData(Long.parseLong(employeeId),
+//						type, UserDetailsFilterColumn.HIRED_AS_LATERAL_MT, country);
+//				if (Validator.isNotNull(mtOrLateralArray))
+//					Collections.sort(mtOrLateralArray);
+//				finalJsonObject.put("mtOrLateralArray", _zenMeRecommendationApi.bridgeStringJSON(mtOrLateralArray));
+
+
+				PrintWriter printWriter = null;
+				try {
+					printWriter = resourceResponse.getWriter();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+				resourceResponse.setContentType(ContentTypes.APPLICATION_JSON);
+				if (Validator.isNotNull(printWriter)) {
+					printWriter.println(finalJsonObject.toJSONString());
+				}
+				printWriter.close();
+			}
+
+		}
+
+	}
+
+	public List<String> getCountryListByManager(long managerId) {
+
+		try {
+			DynamicQuery query = UserDetailsLocalServiceUtil.dynamicQuery();
+
+			Disjunction disjunction = RestrictionsFactoryUtil.disjunction();
+			disjunction.add(RestrictionsFactoryUtil.eq("firstUp", managerId));
+			disjunction.add(RestrictionsFactoryUtil.eq("secondUp", managerId));
+			disjunction.add(RestrictionsFactoryUtil.eq("thirdUp", managerId));
+			disjunction.add(RestrictionsFactoryUtil.eq("fourthUp", managerId));
+			query.add(disjunction);
+			query.setProjection(ProjectionFactoryUtil.distinct(ProjectionFactoryUtil.property("country")));
+			query.addOrder(OrderFactoryUtil.asc("country"));
+			List<Object> users = UserDetailsLocalServiceUtil.dynamicQuery(query);
+			if (Validator.isNotNull(users)) {
+				List<String> countries = new ArrayList<>();
+				users.forEach(obj -> {
+					if (Validator.isNotNull(obj)) {
+						countries.add(obj.toString());
+					}
+				});
+				return countries;
+			}
+		} catch (Exception e) {
+		}
+		return null;
+	}
+
+	@Reference
+	private ZenMeRecommendationApi _zenMeRecommendationApi;
+
+}
