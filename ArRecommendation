@@ -1,0 +1,791 @@
+package com.zen.asr.portlet;
+
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
+import javax.portlet.Portlet;
+import javax.portlet.PortletException;
+import javax.portlet.RenderRequest;
+import javax.portlet.RenderResponse;
+import javax.portlet.ResourceRequest;
+import javax.portlet.ResourceResponse;
+
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
+
+import com.liferay.portal.kernel.exception.PortalException;
+import com.liferay.portal.kernel.json.JSONArray;
+import com.liferay.portal.kernel.json.JSONFactoryUtil;
+import com.liferay.portal.kernel.json.JSONObject;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.portlet.bridges.mvc.MVCPortlet;
+import com.liferay.portal.kernel.theme.ThemeDisplay;
+import com.liferay.portal.kernel.util.ContentTypes;
+import com.liferay.portal.kernel.util.ParamUtil;
+import com.liferay.portal.kernel.util.StringUtil;
+import com.liferay.portal.kernel.util.Validator;
+import com.liferay.portal.kernel.util.WebKeys;
+
+import zen.me.portal.common.api.ZenMeRecommendationApi;
+import zen.me.service.constant.ManagerUpType;
+import zen.me.service.constant.UserDetailsFilterColumn;
+import zen.me.service.model.ColumnFilter;
+import zen.me.service.model.ManagerResponse;
+import zen.me.service.model.UserDetails;
+import zen.me.service.service.ColumnFilterLocalServiceUtil;
+import zen.me.service.service.ManagerResponseLocalServiceUtil;
+import zen.me.service.service.UserDetailsLocalServiceUtil;
+
+@Component(immediate = true, property = { "com.liferay.portlet.display-category=ME Portal",
+		"com.liferay.portlet.instanceable=true", "javax.portlet.init-param.template-path=/",
+		"javax.portlet.resource-bundle=content.Language", "javax.portlet.display-name=AR Recommendation  View Portlet",
+		"javax.portlet.security-role-ref=power-user,user",
+		"com.liferay.portlet.header-portlet-css=/css/main.css",
+		"com.liferay.portlet.footer-portlet-javascript=/js/ar_recommedation.js",
+		"com.liferay.portlet.requires-namespaced-parameters=false",
+		"javax.portlet.init-param.view-template=/arrecommend/view.jsp" }, service = Portlet.class)
+public class ARRecommendationPortlet extends MVCPortlet {
+
+	private static Log logger = LogFactoryUtil.getLog(ARRecommendationPortlet.class);
+
+	@Override
+	public void doView(RenderRequest renderRequest, RenderResponse renderResponse)
+			throws IOException, PortletException {
+		super.doView(renderRequest, renderResponse);
+	}
+
+	@Override
+	public void serveResource(ResourceRequest resourceRequest, ResourceResponse resourceResponse)
+			throws IOException, PortletException {
+
+		ThemeDisplay themeDisplay = (ThemeDisplay) resourceRequest.getAttribute(WebKeys.THEME_DISPLAY);
+		if (themeDisplay.isSignedIn()) {
+			ColumnFilter userType = null;
+			try {
+				userType = ColumnFilterLocalServiceUtil
+						.getColumnFilter(themeDisplay.getUser().getJobTitle().toString());
+			} catch (PortalException e2) {
+				// TODO Auto-generated catch block
+				e2.printStackTrace();
+			}
+
+			List<UserDetails> allUsers = null;
+			if (Validator.isNotNull(userType)) {
+				if (!userType.getColumnName().trim().equalsIgnoreCase("All")) {
+					allUsers = UserDetailsLocalServiceUtil.getCountryUserList(userType.getColumnName());
+				} else {
+					allUsers = UserDetailsLocalServiceUtil.getCountryUserList(null);
+				}
+			}
+
+			long employeeId = Long.parseLong(themeDisplay.getUser().getJobTitle());
+			try {
+				String action = ParamUtil.getString(resourceRequest, "action", null);
+				JSONObject jsonObject = JSONFactoryUtil.createJSONObject();
+				if (Validator.isNotNull(action)) {
+					if (StringUtil.equalsIgnoreCase(action, "laodUPType")) {
+						String country = ParamUtil.getString(resourceRequest, "country", "India");
+
+						if (Validator.isBlank(country) || Validator.isNull(country)) {
+							country = "India";
+						}
+						
+						long firstUpCount =  UserDetailsLocalServiceUtil.getManagerUpCount(Long.parseLong(themeDisplay.getUser().getJobTitle()),ManagerUpType.FIRST_UP_MANSGER, country);
+						long secounUpCount =  UserDetailsLocalServiceUtil.getManagerUpCount(Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.SECOND_UP_MANSGER, country);
+						long thirdUpCount =  UserDetailsLocalServiceUtil.getManagerUpCount(Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.THIRD_UP_MANSGER, country);
+						long fourthUpCount =  UserDetailsLocalServiceUtil.getManagerUpCount(Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.FOURTH_UP_MANSGER, country);
+						JSONArray data = JSONFactoryUtil.createJSONArray();
+						JSONArray replicateArray = JSONFactoryUtil.createJSONArray();
+						JSONArray countries = JSONFactoryUtil.createJSONArray();
+						JSONObject object = JSONFactoryUtil.createJSONObject();
+						object.put("key", 0);
+						object.put("data", "TR");
+						
+						replicateArray.put(object);
+						if (firstUpCount >= 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							object.put("key", 1);
+							object.put("data", "1Up");
+							data.put(object);
+							replicateArray.put(object);
+						}
+						if (secounUpCount >= 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							object.put("key", 2);
+							object.put("data", "2Up");
+							data.put(object);
+							replicateArray.put(object);
+						}
+
+						if (thirdUpCount >= 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							object.put("key", 3);
+							object.put("data", "3Up");
+							data.put(object);
+							replicateArray.put(object);
+						}
+						if (fourthUpCount >= 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							object.put("key", 4);
+							object.put("data", "4Up");
+							data.put(object);
+							replicateArray.put(object);
+						}
+
+						List<String> countriesList = new ArrayList<String>();
+						String countryVal = null;
+						for (UserDetails users : allUsers) {
+							countryVal = users.getCountry();
+							countriesList.add(countryVal);
+						}
+						Set<String> UniqueCountries = new HashSet<String>(countriesList);
+						if (Validator.isNotNull(UniqueCountries)) {
+							UniqueCountries.forEach(c -> {
+								countries.put(c);
+							});
+						}
+
+						jsonObject.put("countriesList", UniqueCountries);
+						jsonObject.put("managerUPAccessArray", data);
+
+					} else if (StringUtil.equalsIgnoreCase(action, "loadFilters")) {
+						logger.info("loadFilters called");
+						int type = ParamUtil.getInteger(resourceRequest, "type", 1);
+						String country = ParamUtil.getString(resourceRequest, "country", userType.getColumnName());
+						String companyVBU = ParamUtil.getString(resourceRequest, "companyVBU",null);
+						if (Validator.isBlank(country) || Validator.isNull(country)) {
+							country = userType.getColumnName();
+						}
+						List<Long> managerNamesList = null;
+
+						List<String> gredes=new ArrayList<String>();
+						try {
+							gredes = UserDetailsLocalServiceUtil.getFilterData(0, type,
+									UserDetailsFilterColumn.CURRENT_GRADE, country,companyVBU);
+							if (Validator.isNotNull(gredes))
+								Collections.sort(gredes);
+						} catch (Exception e1) {
+						}
+						jsonObject.put("currentGrade", _zenMeRecommendationApi.bridgeStringJSON(gredes));
+
+						List<String> subP=new ArrayList<String>();
+						try {
+							subP = UserDetailsLocalServiceUtil.getFilterData(0, type,
+									UserDetailsFilterColumn.SUB_PRACTICE, country,companyVBU);
+							if (Validator.isNotNull(subP))
+								Collections.sort(subP);
+						} catch (Exception e1) {
+						}
+						jsonObject.put("subPractice", _zenMeRecommendationApi.bridgeStringJSON(subP));
+						
+						List<String> practices=new ArrayList<String>();
+						try {
+							practices = UserDetailsLocalServiceUtil.getFilterData(0, type,
+									UserDetailsFilterColumn.PRACTICE, country,companyVBU);
+							if (Validator.isNotNull(practices))
+								Collections.sort(practices);
+						} catch (Exception e1) {
+						}
+						jsonObject.put("practice", _zenMeRecommendationApi.bridgeStringJSON(practices));
+						
+						/*
+						 * List<String> companyRecoVbu=new ArrayList<String>(); try { companyRecoVbu =
+						 * UserDetailsLocalServiceUtil.getFilterData(0, type,
+						 * UserDetailsFilterColumn.COMP_RECO_VBU, country); if
+						 * (Validator.isNotNull(companyRecoVbu) && companyRecoVbu.size() > 0) {
+						 * Collections.sort(companyRecoVbu); } } catch (Exception e1) { }
+						 * jsonObject.put("companyRecoVbus",
+						 * _zenMeRecommendationApi.bridgeStringJSON(companyRecoVbu));
+						 */
+						
+						List<String> performanceRatings=new ArrayList<String>();
+						try {
+							performanceRatings = UserDetailsLocalServiceUtil.getFilterData(0, type,
+									UserDetailsFilterColumn.PERFORMANCE_RATING, country,companyVBU);
+							if (Validator.isNotNull(performanceRatings) && performanceRatings.size() > 0) {
+								Collections.sort(performanceRatings);
+							}
+						} catch (Exception e1) {
+						}
+						jsonObject.put("performanceRatings", _zenMeRecommendationApi.bridgeStringJSON(performanceRatings));
+						
+						List<String> deviationAllowedTR = new ArrayList<String>();
+						try {
+							deviationAllowedTR = UserDetailsLocalServiceUtil.getFilterData(0, type,
+									UserDetailsFilterColumn.DEVIATION_ALLOWED_FROM_TR_RECO, country,companyVBU);
+							
+							if (Validator.isNotNull(deviationAllowedTR) && deviationAllowedTR.size() > 0) {
+								Collections.sort(deviationAllowedTR);
+							}
+						} catch (Exception e1) {
+						}
+						jsonObject.put("deviationAllowedTr", _zenMeRecommendationApi.bridgeStringJSON(deviationAllowedTR));
+						
+						List<String> customerNames=new ArrayList<String>();
+						try {
+						 customerNames = UserDetailsLocalServiceUtil.getFilterData(0, type,
+								UserDetailsFilterColumn.Customer_Name, country,companyVBU);
+						if (Validator.isNotNull(customerNames) && customerNames.size() > 0) {
+							Collections.sort(customerNames);
+						}
+						}
+						 catch (Exception e1) {
+							}
+						jsonObject.put("customerNames", _zenMeRecommendationApi.bridgeStringJSON(customerNames));
+
+						
+						List<String> projectNames=new ArrayList<String>();
+						try {
+						 projectNames = UserDetailsLocalServiceUtil.getFilterData(0, type,
+								UserDetailsFilterColumn.Project_Name, country,companyVBU);
+						if (Validator.isNotNull(projectNames) && projectNames.size() > 0) {
+							Collections.sort(projectNames);
+						}
+						}
+						catch (Exception e1) {
+						}
+						jsonObject.put("projectNames", _zenMeRecommendationApi.bridgeStringJSON(projectNames));
+
+						
+
+						
+						managerNamesList = UserDetailsLocalServiceUtil.getManagerListByType(type, country,companyVBU);
+
+						JSONArray managerNamesArray = JSONFactoryUtil.createJSONArray();
+						JSONArray sortedData = JSONFactoryUtil.createJSONArray();
+						if (Validator.isNotNull(managerNamesList)) {
+							if (Validator.isNotNull(managerNamesList)) {
+								managerNamesList.forEach(id -> {
+									try {
+										//UserDetails obj = UserDetailsLocalServiceUtil.getUserDetails(id);
+										User user=null;
+										try {
+											user = UserDetailsLocalServiceUtil.getUserByJobTitle(String.valueOf(id));
+										} catch (Exception e) {
+										}
+										
+										if(Validator.isNotNull(user)) {
+											JSONObject object = JSONFactoryUtil.createJSONObject();
+											object.put("key", user.getFullName());
+											object.put("data", user.getJobTitle());
+											managerNamesArray.put(object);
+										}
+										
+									} catch (Exception e) {
+										// TODO Auto-generated catch block
+										e.printStackTrace();
+									}
+
+								});
+								sortedData = _zenMeRecommendationApi.sortUserName(managerNamesArray);
+							}
+						}
+						//jsonObject.put("drNamesList", managerNamesArray);
+						jsonObject.put("drNamesList", sortedData);
+					} else if (StringUtil.equalsIgnoreCase(action, "loadUserData")) {
+						logger.info("Loading User Data>>>");
+						int type = ParamUtil.getInteger(resourceRequest, "type", 1);
+						String country = ParamUtil.getString(resourceRequest, "country", userType.getColumnName());
+						String companyVBU = ParamUtil.getString(resourceRequest, "companyVBU", null);
+
+						String deviationAllowedTr = ParamUtil.getString(resourceRequest, "deviationAllowedTr", null);
+						String totalIncrementReco = ParamUtil.getString(resourceRequest, "totalIncrementReco", null);
+						String deviationIdealMarker = ParamUtil.getString(resourceRequest, "deviationIdealMarker",
+								null);
+						String promotion = ParamUtil.getString(resourceRequest, "promotion", null);
+						String tenureinCurrentGrade = ParamUtil.getString(resourceRequest, "currentGrade", null);
+						String grade = ParamUtil.getString(resourceRequest, "grade", null);
+						String lateralMT = ParamUtil.getString(resourceRequest, "lateralMT", null);
+						String cumulativePerfScore = ParamUtil.getString(resourceRequest, "cumulativePerfScore", null);
+						String nicheSkill = ParamUtil.getString(resourceRequest, "nicheSkill", null);
+						String topTalent = ParamUtil.getString(resourceRequest, "topTalent", null);
+						String criticalTalent = ParamUtil.getString(resourceRequest, "criticalTalent", null);
+						String practice = ParamUtil.getString(resourceRequest, "practice", null);
+						String subPractice = ParamUtil.getString(resourceRequest, "subPractice", null);
+						String gender = ParamUtil.getString(resourceRequest, "gender", null);
+						String pendingCases = ParamUtil.getString(resourceRequest, "pendingCases", null);
+						String DRNameIds = ParamUtil.getString(resourceRequest, "DRName", null);
+						String DRDeviationRange = ParamUtil.getString(resourceRequest, "DRDeviationRange", null);
+						String performanceRating = ParamUtil.getString(resourceRequest, "performanceRating", null);
+						String associateNames = ParamUtil.getString(resourceRequest, "myReport", null);
+						String performerType = ParamUtil.getString(resourceRequest, "performerType", null);
+						String projectName = ParamUtil.getString(resourceRequest, "projectName", null);
+						String customerName = ParamUtil.getString(resourceRequest, "customerName", null);
+						String resignationStatus = ParamUtil.getString(resourceRequest, "resignationStatus", null);
+						String top100 = ParamUtil.getString(resourceRequest, "top100", null);
+						//String companyRecoVbu = ParamUtil.getString(resourceRequest, "companyRecoVbu", null);
+						String DRDeviationRangeUp = ParamUtil.getString(resourceRequest, "DRDeviationRangeUp", null);
+						String DRPriority = ParamUtil.getString(resourceRequest, "DRPriority", null);
+						int colorStat = 0;
+						List<Long> associateIds = new ArrayList<Long>();
+
+						if (country.length() == 0) {
+							country = userType.getColumnName();
+						} /*
+							 * else { if (Validator.isNotNull(userType)) { if
+							 * (userType.getColumnName().trim().equalsIgnoreCase("All")) { country = null; }
+							 * } }
+							 */
+
+						long totalAssociatesCount = 0;
+						try {
+							totalAssociatesCount = UserDetailsLocalServiceUtil.getTotalAssociatesCount(type, 0,
+									country,companyVBU);
+						} catch (Exception e1) {
+							e1.printStackTrace();
+						}
+						
+						companyVBU = Validator.isNull(companyVBU)?companyVBU:"'"+companyVBU+"'";
+
+
+						allUsers = UserDetailsLocalServiceUtil.getFilterData(0, country, type,
+								_zenMeRecommendationApi.bridgeList(deviationAllowedTr),
+								_zenMeRecommendationApi.bridgeList(totalIncrementReco),
+								_zenMeRecommendationApi.bridgeList(deviationIdealMarker),
+								_zenMeRecommendationApi.bridgeList(tenureinCurrentGrade),
+								_zenMeRecommendationApi.bridgeList(grade),
+								_zenMeRecommendationApi.bridgeList(cumulativePerfScore),
+								_zenMeRecommendationApi.bridgeList(practice),
+								_zenMeRecommendationApi.bridgeList(subPractice),
+								_zenMeRecommendationApi.bridgeList(DRNameIds), nicheSkill, topTalent, criticalTalent,
+								gender, promotion, lateralMT, _zenMeRecommendationApi.bridgeList(performanceRating),
+								_zenMeRecommendationApi.bridgeList(associateNames),
+								_zenMeRecommendationApi.bridgeList(performerType),
+								_zenMeRecommendationApi.bridgeList(customerName),
+								_zenMeRecommendationApi.bridgeList(projectName),companyVBU,resignationStatus,false,true,top100);
+
+						List<String> deviationList = null;
+						if (DRDeviationRange != null && !DRDeviationRange.equalsIgnoreCase("null")) {
+							DRDeviationRange = _zenMeRecommendationApi.bridgeList(DRDeviationRange);
+							deviationList = Arrays.asList(DRDeviationRange.split(","));
+						}
+						final boolean isDeviationFilterApply = DRDeviationRange.equalsIgnoreCase("null") ? false : true;
+						double startRange = 0.0f;
+						double endRange = 0.0f;
+
+						if (isDeviationFilterApply && Validator.isNotNull(deviationList)) {
+							try {
+								if (deviationList.size() == 1) {
+									String percentage = deviationList.get(0);
+
+									if (percentage.equalsIgnoreCase("-11")) {
+										startRange = -11;
+										endRange = -50;
+									} else if (percentage.equalsIgnoreCase("11")) {
+										startRange = 11;
+										endRange = 50;
+									}
+								} else {
+									startRange = Double.parseDouble(deviationList.get(0).replaceAll("^\"|\"$", ""));
+									endRange = Double.parseDouble(deviationList.get(1).replaceAll("^\"|\"$", ""));
+								}
+							} catch (Exception e) {
+								// TODO Auto-generated catch block
+								e.printStackTrace();
+							}
+						}
+
+						JSONArray jsonArray = JSONFactoryUtil.createJSONArray();
+						int index = 0;
+						
+						if(Validator.isNotNull(allUsers)&&allUsers.size()>0)
+						{
+							
+							for (UserDetails userDat : allUsers) {
+								associateIds.add(userDat.getAssociateId());
+							}
+						}
+						List<String> deviationListRange = null;
+						List<String> priorityList = null;
+						
+						 
+							if (Validator.isNotNull(DRPriority) && DRPriority.length() > 0) {
+								DRPriority = DRPriority.substring(1, DRPriority.length() - 1).replaceAll("\"", "");
+								priorityList = Arrays.asList(DRPriority.split(","));
+							}
+							 if (Validator.isNotNull(DRDeviationRangeUp) && DRDeviationRangeUp.length()>0) {
+								 DRDeviationRangeUp=DRDeviationRangeUp.substring(1, DRDeviationRangeUp.length() - 1).replaceAll("\"", "");
+								  deviationListRange = Arrays.asList(DRDeviationRangeUp.split(","));
+							  }
+						  if (((Validator.isNotNull(deviationListRange) && deviationListRange.size() > 0)
+								  ||(Validator.isNotNull(priorityList) && priorityList.size() > 0)) 
+									&& Validator.isNotNull(country)&&Validator.isNotNull(associateIds) && associateIds.size() > 0) {
+							  List<Long> listAssoByDeviationRangeAndPrior=ManagerResponseLocalServiceUtil.
+									  getManagerListByPriorAndDeviation(type, country,deviationListRange,priorityList, associateIds);
+							  if(Validator.isNotNull(listAssoByDeviationRangeAndPrior)&&listAssoByDeviationRangeAndPrior.size()>0)
+								{
+								  allUsers=UserDetailsLocalServiceUtil.getUserListByIdList(listAssoByDeviationRangeAndPrior);
+								}
+							  else if(listAssoByDeviationRangeAndPrior.size()<1)
+							  {
+								  allUsers=null;
+							  }
+						  }
+						
+						if (Validator.isNotNull(allUsers)) {
+							for (UserDetails obj : allUsers) {
+								try {
+									String json = JSONFactoryUtil.looseSerialize(obj);
+									JSONObject jObj = JSONFactoryUtil.createJSONObject(json);
+									ManagerResponse response = obj.getManagerResponse(obj.getAssociateId(), type);
+
+									if (response != null) {
+										if (pendingCases.equalsIgnoreCase("no")) {
+											continue;
+										}
+										if (isDeviationFilterApply) {
+											if ((response.getDeviation() >= startRange
+													&& response.getDeviation() <= endRange)
+													|| (response.getDeviation() >= endRange
+															&& response.getDeviation() <= startRange)) {
+
+											} else {
+												continue;
+											}
+										}
+										jObj.put("status", response.getStatus());
+										jObj.put("managerResponseManagerRecommendation", response.getPercentage());
+										jObj.put("managerResponseDeviationFromTRReco", response.getDeviation());
+										jObj.put("managerResponseSalaryIncreament",
+												response.getTotalIncrementReco());
+										jObj.put("managerResponseNewSalary", response.getTotalSalaryReco());
+										jObj.put("managerResponseReason", response.getReason());
+										if(Validator.isNotNull(response.getPriority()) && response.getPriority().length()>0)
+												{
+											jObj.put("managerResponsePriority", response.getPriority());
+												}
+										else
+										{
+											jObj.put("managerResponsePriority", "N/A");
+										}
+										jObj.put("managerResponsePerformanceIncrementReco",response.getPerformanceIncrementReco());
+										jObj.put("managerResponsePromotionIncrementReco",response.getPromotionIncrementReco());
+										jObj.put("managerResponseMTFitmentReco", response.getMTFitmentReco());
+										jObj.put("managerResponseMarketFitmentReco", response.getMarketFitmentReco());
+										jObj.put("managerResponseDiversityFitmentReco", response.getDiversityReco());
+										jObj.put("managerResponseTop100Increment", response.getTop100IncrementReco());
+										if (Validator.isNotNull(response.getStatus())
+												&& Validator.isNotNull(response.getDeviation())) {
+											colorStat = _zenMeRecommendationApi.colorStatus(response,obj);
+										}
+										jObj.put("colorStatus", colorStat);
+									} else {
+										if (pendingCases.equalsIgnoreCase("yes")) {
+											continue;
+										}
+										if (isDeviationFilterApply) {
+											continue;
+										}
+										jObj.put("status",0);
+										jObj.put("colorStatus", 0);
+										jObj.put("managerResponseManagerRecommendation", -1);
+										jObj.put("managerResponseDeviationFromTRReco", 0);
+										jObj.put("managerResponseSalaryIncreament", 0);
+										jObj.put("managerResponseNewSalary", 0);
+										jObj.put("managerResponseReason", "");
+										jObj.put("managerResponsePriority", "N/A");
+
+										jObj.put("managerResponsePerformanceIncrementReco", 0);
+										jObj.put("managerResponsePromotionIncrementReco", 0);
+										jObj.put("managerResponseMTFitmentReco", 0);
+										jObj.put("managerResponseMarketFitmentReco", 0);
+										jObj.put("managerResponseDiversityFitmentReco", 0);
+										jObj.put("managerResponseTop100Increment", 0);
+									}
+
+									ManagerResponse first = obj.getManagerResponse(obj.getAssociateId(),
+											ManagerUpType.FIRST_UP_MANSGER);
+									if (Validator.isNotNull(first)) {
+										jObj.put("firstUpInput", first.getPercentage() + "%");
+										jObj.put("firstUpIncreament", first.getTotalIncrementReco());
+										jObj.put("firstUpReason",
+												first.getReason().isEmpty() ? " - " : first.getReason());
+										jObj.put("firstUpFinalInput", first.getPercentage() + "%");
+										jObj.put("totalFirstUpIncreament", (int) first.getTotalSalaryReco());
+										jObj.put("firstUpFinalPriority", first.getPriority());
+										jObj.put("firstUpDeviation", (int) first.getDeviation());
+										jObj.put("firstUpTop100Increment", (int) first.getTop100IncrementReco());
+									} else {
+										jObj.put("firstUpInput", 0 + "%");
+										jObj.put("firstUpIncreament", 0);
+										jObj.put("firstUpReason", " - ");
+										jObj.put("firstUpFinalInput", "false");
+										jObj.put("totalFirstUpIncreament", 0);
+										jObj.put("firstUpFinalPriority", "N/A");
+										jObj.put("firstUpDeviation", 0);
+										jObj.put("firstUpTop100Increment", 0);
+										
+									}
+									ManagerResponse second = obj.getManagerResponse(obj.getAssociateId(),
+											ManagerUpType.SECOND_UP_MANSGER);
+									if (Validator.isNotNull(second)) {
+										jObj.put("secondUpInput", second.getPercentage() + "%");
+										jObj.put("secondUpIncreament", second.getTotalIncrementReco());
+										jObj.put("secondUpReason",
+												second.getReason().isEmpty() ? " - " : second.getReason());
+										jObj.put("secondUpFinalInput", second.getPercentage() + "%");
+										jObj.put("totalSecondUpIncreament", (int) second.getTotalSalaryReco());
+										jObj.put("secondUpFinalPriority", second.getPriority());
+										jObj.put("secondUpDeviation", (int) second.getDeviation());
+										jObj.put("secondUpTop100Increment", (int) second.getTop100IncrementReco());
+									} else {
+										jObj.put("secondUpInput", 0 + "%");
+										jObj.put("secondUpIncreament", 0);
+										jObj.put("secondUpReason", " - ");
+										jObj.put("secondUpFinalInput", "false");
+										jObj.put("totalSecondUpIncreament", 0);
+										jObj.put("secondUpFinalPriority", "N/A");
+										jObj.put("secondUpDeviation", 0);
+										jObj.put("secondUpTop100Increment", 0);
+									}
+
+									ManagerResponse third = obj.getManagerResponse(obj.getAssociateId(),
+											ManagerUpType.THIRD_UP_MANSGER);
+									if (Validator.isNotNull(third)) {
+										jObj.put("thirdUpInput", third.getPercentage() + "%");
+										jObj.put("thirdUpIncreament", third.getTotalIncrementReco());
+										jObj.put("thirdUpReason",
+												third.getReason().isEmpty() ? " - " : third.getReason());
+										jObj.put("thirdUpFinalInput", third.getPercentage() + "%");
+										jObj.put("totalThirdUpIncreament", (int) third.getTotalSalaryReco());
+										jObj.put("thirdUpFinalPriority", third.getPriority());
+										jObj.put("thirdUpDeviation", (int) third.getDeviation());
+										jObj.put("thirdUpTop100Increment", (int) third.getTop100IncrementReco());
+									} else {
+										jObj.put("thirdUpInput", 0 + "%");
+										jObj.put("thirdUpIncreament", 0);
+										jObj.put("thirdUpReason", " - ");
+										jObj.put("thirdUpFinalInput", "false");
+										jObj.put("totalThirdUpIncreament", 0);
+										jObj.put("thirdUpFinalPriority", "N/A");
+										jObj.put("thirdUpDeviation", 0);
+										jObj.put("thirdUpTop100Increment", 0);
+									}
+									ManagerResponse fourth = obj.getManagerResponse(obj.getAssociateId(),
+											ManagerUpType.FOURTH_UP_MANSGER);
+									if (Validator.isNotNull(fourth)) {
+										jObj.put("fourthUpReason",
+												fourth.getReason().isEmpty() ? " - " : fourth.getReason());
+										jObj.put("fourthUpFinalInput", fourth.getPercentage() + "%");
+										jObj.put("fourthtUpIncreament", (int) fourth.getTotalIncrementReco());
+										jObj.put("totalFourthUpIncreament", (int) fourth.getTotalSalaryReco());
+										jObj.put("fourthUpFinalPriority", fourth.getPriority());
+										jObj.put("fourthUpDeviation", (int) fourth.getDeviation());
+										jObj.put("fourthUpTop100Increment", (int) fourth.getTop100IncrementReco());
+										
+									} else {
+										jObj.put("fourthUpReason", " - ");
+										jObj.put("fourthUpFinalInput", "false");
+										jObj.put("fourthtUpIncreament", 0);
+										jObj.put("totalFourthUpIncreament", 0);
+										jObj.put("fourthUpFinalPriority", "N/A");
+										jObj.put("fourthUpDeviation", 0);
+										jObj.put("fourthUpTop100Increment", 0);
+									}
+
+									jObj.put("index", index++);
+									jsonArray.put(jObj);
+								} catch (Exception e) {
+									e.printStackTrace();
+								}
+
+							}
+
+						}
+						JSONArray replicateArray = JSONFactoryUtil.createJSONArray();
+						JSONObject object = JSONFactoryUtil.createJSONObject();
+						object.put("key", 0);
+						object.put("data", "TR");
+
+						replicateArray.put(object);
+						if (type == ManagerUpType.SECOND_UP_MANSGER) {
+							object = JSONFactoryUtil.createJSONObject();
+							object.put("key", 1);
+							object.put("data", "1Up");
+							replicateArray.put(object);
+						}
+						if (type == ManagerUpType.THIRD_UP_MANSGER) {
+							for (int i = 1; i < 3; i++) {
+								object = JSONFactoryUtil.createJSONObject();
+								object.put("key", i);
+								object.put("data", i + "-Up");
+								replicateArray.put(object);
+							}
+						}
+
+						if (type == ManagerUpType.FOURTH_UP_MANSGER) {
+							for (int i = 1; i < 4; i++) {
+								object = JSONFactoryUtil.createJSONObject();
+								object.put("key", i);
+								object.put("data", i + "-Up");
+								replicateArray.put(object);
+							}
+						}
+					
+
+
+						jsonObject.put("userDetailsList", jsonArray);
+						jsonObject.put("replicateArray", replicateArray);
+						jsonObject.put("isFilterApplied", totalAssociatesCount == jsonArray.length() ? false : true);
+						// jsonObject.put("totalAssociatesCount", totalAssociatesCount);
+						// jsonObject.put("totalResponseCount", totalResponseCount);
+						// jsonObject.put("pendingCount", (totalAssociatesCount - totalResponseCount));
+					} else if (StringUtil.equalsIgnoreCase(action, "trimData")) {
+					}
+
+					else if (StringUtil.equalsIgnoreCase(action, "updateCalumn")) {
+						String columns = ParamUtil.getString(resourceRequest, "columnList", null);
+						int type = ParamUtil.getInteger(resourceRequest, "type", 1);
+						if (columns != null && columns.length() > 0) {
+							columns = _zenMeRecommendationApi.bridgeList(columns);
+						}
+						jsonObject.put("headerList", _zenMeRecommendationApi.getHeaders(columns, type));
+					} 
+					else if(StringUtil.equalsIgnoreCase(action, "loadCompanyVBU")) {     
+						String country=ParamUtil.getString(resourceRequest, "country", null);
+						if(Validator.isNotNull(country)) {
+							JSONArray recoarray=JSONFactoryUtil.createJSONArray();
+							JSONObject vbuObj=JSONFactoryUtil.createJSONObject();
+						List<String> VBUlist = null;
+						VBUlist=UserDetailsLocalServiceUtil.getCompanyRecoVBU(country);
+						
+						if (Validator.isNotNull(VBUlist)) {
+							
+						for (String vbu : VBUlist) {
+								recoarray.put(vbu);
+								
+							}
+						}
+						jsonObject.put("vbuList", recoarray);
+						}
+
+				}
+					
+					else if (StringUtil.equalsIgnoreCase(action, "completionReport")) {
+
+						long firstUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+								Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.FIRST_UP_MANSGER,
+								null);
+						long secounUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+								Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.SECOND_UP_MANSGER,
+								null);
+						long thirdUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+								Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.THIRD_UP_MANSGER,
+								null);
+						long fourthUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+								Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.FOURTH_UP_MANSGER,
+								null);
+
+						JSONArray data = JSONFactoryUtil.createJSONArray();
+						JSONObject object = null;
+						long totalAssociatesCount = 0;
+						long totalResponseCount = 0;
+
+						if (firstUpCount > 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							try {
+								totalAssociatesCount = UserDetailsLocalServiceUtil
+										.getTotalAssociatesCount(ManagerUpType.FIRST_UP_MANSGER, employeeId, null);
+								;
+							} catch (Exception e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							totalResponseCount = ManagerResponseLocalServiceUtil
+									.getManagerResponseCountByRole(employeeId, ManagerUpType.FIRST_UP_MANSGER, null);
+
+							object.put("key", 1);
+							object.put("count", (totalAssociatesCount - totalResponseCount));
+							data.put(object);
+						}
+						if (secounUpCount > 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							try {
+								totalAssociatesCount = UserDetailsLocalServiceUtil
+										.getTotalAssociatesCount(ManagerUpType.SECOND_UP_MANSGER, employeeId, null);
+								;
+							} catch (Exception e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							totalResponseCount = ManagerResponseLocalServiceUtil
+									.getManagerResponseCountByRole(employeeId, ManagerUpType.SECOND_UP_MANSGER, null);
+
+							object.put("key", 2);
+							object.put("count", (totalAssociatesCount - totalResponseCount));
+							data.put(object);
+						}
+						if (thirdUpCount > 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							try {
+								totalAssociatesCount = UserDetailsLocalServiceUtil
+										.getTotalAssociatesCount(ManagerUpType.THIRD_UP_MANSGER, employeeId, null);
+								;
+							} catch (Exception e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							totalResponseCount = ManagerResponseLocalServiceUtil
+									.getManagerResponseCountByRole(employeeId, ManagerUpType.THIRD_UP_MANSGER, null);
+
+							object.put("key", 3);
+							object.put("count", (totalAssociatesCount - totalResponseCount));
+							data.put(object);
+						}
+						if (fourthUpCount > 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							try {
+								totalAssociatesCount = UserDetailsLocalServiceUtil
+										.getTotalAssociatesCount(ManagerUpType.FOURTH_UP_MANSGER, employeeId, null);
+								;
+							} catch (Exception e1) {
+								// TODO Auto-generated catch block
+								e1.printStackTrace();
+							}
+							totalResponseCount = ManagerResponseLocalServiceUtil
+									.getManagerResponseCountByRole(employeeId, ManagerUpType.FOURTH_UP_MANSGER, null);
+							object.put("key", 4);
+							object.put("count", (totalAssociatesCount - totalResponseCount));
+							data.put(object);
+						}
+
+						jsonObject.put("reportData", data);
+					}
+					
+					
+
+				}
+				PrintWriter printWriter = null;
+				try {
+					printWriter = resourceResponse.getWriter();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+				resourceResponse.setContentType(ContentTypes.APPLICATION_JSON);
+				if (Validator.isNotNull(printWriter)) {
+					printWriter.println(jsonObject.toJSONString());
+				}
+				printWriter.close();
+			} catch (Exception e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+
+		}
+
+	}
+
+	
+
+	@Reference
+	private ZenMeRecommendationApi _zenMeRecommendationApi;
+
+}
