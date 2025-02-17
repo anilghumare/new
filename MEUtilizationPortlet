@@ -1,0 +1,782 @@
+package com.zen.asr.portlet;
+
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
+import javax.portlet.Portlet;
+import javax.portlet.PortletException;
+import javax.portlet.RenderRequest;
+import javax.portlet.RenderResponse;
+import javax.portlet.ResourceRequest;
+import javax.portlet.ResourceResponse;
+
+import org.osgi.service.component.annotations.Component;
+
+import com.liferay.portal.kernel.dao.orm.Disjunction;
+import com.liferay.portal.kernel.dao.orm.DynamicQuery;
+import com.liferay.portal.kernel.dao.orm.OrderFactoryUtil;
+import com.liferay.portal.kernel.dao.orm.ProjectionFactoryUtil;
+import com.liferay.portal.kernel.dao.orm.RestrictionsFactoryUtil;
+import com.liferay.portal.kernel.json.JSONArray;
+import com.liferay.portal.kernel.json.JSONFactoryUtil;
+import com.liferay.portal.kernel.json.JSONObject;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.portlet.bridges.mvc.MVCPortlet;
+import com.liferay.portal.kernel.theme.ThemeDisplay;
+import com.liferay.portal.kernel.util.ContentTypes;
+import com.liferay.portal.kernel.util.ParamUtil;
+import com.liferay.portal.kernel.util.StringPool;
+import com.liferay.portal.kernel.util.StringUtil;
+import com.liferay.portal.kernel.util.Validator;
+import com.liferay.portal.kernel.util.WebKeys;
+import com.zen.asr.constants.ZenMeUtilizationPortletKeys;
+import com.zen.asr.util.DashboardUtil;
+
+import zen.me.service.constant.ManagerUpType;
+import zen.me.service.constant.RecoType;
+import zen.me.service.model.ManagerResponse;
+import zen.me.service.model.UserDetails;
+import zen.me.service.service.ManagerResponseLocalServiceUtil;
+import zen.me.service.service.UserDetailsLocalServiceUtil;
+
+/**
+ * @author FS48443
+ */
+@Component(immediate = true, property = { "com.liferay.portlet.display-category=category.sample",
+		"com.liferay.portlet.instanceable=true", "javax.portlet.init-param.template-path=/",
+		"javax.portlet.display-name=ME Utilization View Portlet",
+		"javax.portlet.init-param.view-template=/utilization/view.jsp",
+		"com.liferay.portlet.footer-portlet-javascript=/js/utilization.js",
+		"javax.portlet.name=" + ZenMeUtilizationPortletKeys.ZenMeUtilization,
+		"javax.portlet.resource-bundle=content.Language", "com.liferay.portlet.requires-namespaced-parameters=false",
+		"javax.portlet.security-role-ref=power-user,user" }, service = Portlet.class)
+public class ZenMeUtilizationPortlet extends MVCPortlet {
+
+	private static Log logger = LogFactoryUtil.getLog(ZenMeUtilizationPortlet.class);
+
+	@Override
+	public void doView(RenderRequest renderRequest, RenderResponse renderResponse)
+			throws IOException, PortletException {
+		super.doView(renderRequest, renderResponse);
+	}
+
+	@Override
+	public void serveResource(ResourceRequest resourceRequest, ResourceResponse resourceResponse)
+			throws IOException, PortletException {
+		// TODO Auto-generated method stub
+		ThemeDisplay themeDisplay = (ThemeDisplay) resourceRequest.getAttribute(WebKeys.THEME_DISPLAY);
+		if (Validator.isNotNull(themeDisplay) && themeDisplay.isSignedIn()) {
+			long employeeId = Long.parseLong(themeDisplay.getUser().getJobTitle());
+			try {
+				String action = ParamUtil.getString(resourceRequest, "action", null);
+				logger.info("Action  <<  " + action);
+				JSONObject jsonObject = JSONFactoryUtil.createJSONObject();
+				JSONArray jsonArray = JSONFactoryUtil.createJSONArray();
+
+				if (Validator.isNotNull(action)) {
+					if (StringUtil.equalsIgnoreCase(action, "laodUPType")) {
+						logger.info("Action  Inside<<  " + action);
+						String country = ParamUtil.getString(resourceRequest, "country", null);
+						JSONArray countries = JSONFactoryUtil.createJSONArray();
+						List<String> countriesList = getCountryListByManager(
+								Long.parseLong(themeDisplay.getUser().getJobTitle()));
+						if (Validator.isNotNull(countriesList)) {
+							countriesList.forEach(c -> {
+								countries.put(c);
+							});
+						}
+
+						try {
+							if (Validator.isBlank(country) || Validator.isNull(country)) {
+								country = countriesList.get(0);
+							}
+						} catch (Exception e) {
+						}
+
+						if (country.equalsIgnoreCase("ALL")) {
+							country = null;
+						}
+						long firstUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+								Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.FIRST_UP_MANSGER,
+								country);
+						long secounUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+								Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.SECOND_UP_MANSGER,
+								country);
+						long thirdUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+								Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.THIRD_UP_MANSGER,
+								country);
+						long fourthUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+								Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.FOURTH_UP_MANSGER,
+								country);
+						JSONArray data = JSONFactoryUtil.createJSONArray();
+						JSONArray replicateArray = JSONFactoryUtil.createJSONArray();
+
+						JSONObject object = JSONFactoryUtil.createJSONObject();
+						replicateArray.put(object);
+						if (firstUpCount > 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							object.put("key", 1);
+							object.put("data", "1Up");
+							data.put(object);
+							replicateArray.put(object);
+						}
+						if (secounUpCount > 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							object.put("key", 2);
+							object.put("data", "2Up");
+							data.put(object);
+							replicateArray.put(object);
+						}
+
+						if (thirdUpCount > 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							object.put("key", 3);
+							object.put("data", "3Up");
+							data.put(object);
+							replicateArray.put(object);
+						}
+						if (fourthUpCount > 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							object.put("key", 4);
+							object.put("data", "4Up");
+							data.put(object);
+							replicateArray.put(object);
+						}
+
+						// List<String> countriesList = UserDetailsLocalServiceUtil.getCountry();
+
+						jsonObject.put("countriesList", countriesList);
+						jsonObject.put("managerUPAccessArray", data);
+
+					} else if (StringUtil.equalsIgnoreCase(action, "laodUsersList")) {
+
+						logger.info("Action  Inside<<  " + action);
+						int type = ParamUtil.getInteger(resourceRequest, "type", 0);
+						String country = ParamUtil.getString(resourceRequest, "country", null);
+						DecimalFormat df = new DecimalFormat("0.0");
+
+						if (Validator.isNotNull(country) && type != 0) {
+
+							if (country.equalsIgnoreCase("ALL")) {
+								country = null;
+							}
+
+							long loggedInUserAssociatesCount = 0;
+							long loggedInUserCompletedAssociatesCount = 0;
+							String budgetUtilization = null;
+							String loggedInUserProfilePic = StringPool.BLANK;
+							String loggedInUserName = StringPool.BLANK;
+							loggedInUserProfilePic = themeDisplay.getUser().getPortraitURL(themeDisplay);
+							loggedInUserName = themeDisplay.getUser().getFullName();
+							int DRType = 0;
+							List<UserDetails> lstUsers = UserDetailsLocalServiceUtil.getAssocitesList(type,
+									Long.parseLong(themeDisplay.getUser().getJobTitle()), country, 0);
+							List<Long> lstAssociateIds = new ArrayList<Long>();
+							if (Validator.isNotNull(lstUsers) && lstUsers.size() > 0) {
+								for (UserDetails userDetails : lstUsers) {
+									lstAssociateIds.add(userDetails.getAssociateId());
+								}
+							}
+							if (type == ManagerUpType.FOURTH_UP_MANSGER) {
+								loggedInUserAssociatesCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+										Long.parseLong(themeDisplay.getUser().getJobTitle()),
+										ManagerUpType.FOURTH_UP_MANSGER, country);
+								loggedInUserCompletedAssociatesCount = ManagerResponseLocalServiceUtil
+										.getManagerResponseCountByRole(
+												Long.parseLong(themeDisplay.getUser().getJobTitle()),
+												ManagerUpType.FOURTH_UP_MANSGER, country, null);
+								DRType = ManagerUpType.THIRD_UP_MANSGER;
+							} else if (type == ManagerUpType.THIRD_UP_MANSGER) {
+								loggedInUserAssociatesCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+										Long.parseLong(themeDisplay.getUser().getJobTitle()),
+										ManagerUpType.THIRD_UP_MANSGER, country);
+								loggedInUserCompletedAssociatesCount = ManagerResponseLocalServiceUtil
+										.getManagerResponseCountByRole(
+												Long.parseLong(themeDisplay.getUser().getJobTitle()),
+												ManagerUpType.THIRD_UP_MANSGER, country, null);
+								DRType = ManagerUpType.SECOND_UP_MANSGER;
+							} else if (type == ManagerUpType.SECOND_UP_MANSGER) {
+								loggedInUserAssociatesCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+										Long.parseLong(themeDisplay.getUser().getJobTitle()),
+										ManagerUpType.SECOND_UP_MANSGER, country);
+								loggedInUserCompletedAssociatesCount = ManagerResponseLocalServiceUtil
+										.getManagerResponseCountByRole(
+												Long.parseLong(themeDisplay.getUser().getJobTitle()),
+												ManagerUpType.SECOND_UP_MANSGER, country, null);
+								DRType = ManagerUpType.FIRST_UP_MANSGER;
+							} else if (type == ManagerUpType.FIRST_UP_MANSGER) {
+								loggedInUserAssociatesCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+										Long.parseLong(themeDisplay.getUser().getJobTitle()),
+										ManagerUpType.FIRST_UP_MANSGER, country);
+								loggedInUserCompletedAssociatesCount = ManagerResponseLocalServiceUtil
+										.getManagerResponseCountByRole(
+												Long.parseLong(themeDisplay.getUser().getJobTitle()),
+												ManagerUpType.FIRST_UP_MANSGER, country, null);
+							}
+
+							if (Validator.isNotNull(lstAssociateIds) && lstAssociateIds.size() > 0) {
+								budgetUtilization = ManagerResponseLocalServiceUtil.getBudgetUtilization(type,
+										Long.parseLong(themeDisplay.getUser().getJobTitle()), country, lstAssociateIds);
+							}
+                          //  logger.info("The Total budgetUtilization "+budgetUtilization);
+							JSONObject loggedInUserDetails = JSONFactoryUtil.createJSONObject();
+							JSONArray userData = JSONFactoryUtil.createJSONArray();
+							loggedInUserDetails.put("loggedInUserAssociatesCount", loggedInUserAssociatesCount);
+							loggedInUserDetails.put("loggedInUserName", loggedInUserName);
+							loggedInUserDetails.put("loggedInUserProfilePic", loggedInUserProfilePic);
+							loggedInUserDetails.put("loggedInUserEmployeeId", themeDisplay.getUser().getJobTitle());
+							loggedInUserDetails.put("budgetUtilization",
+									df.format(Double.parseDouble(budgetUtilization)));
+							loggedInUserDetails.put("loggedInUserCompletedAssociatesCount",
+									loggedInUserCompletedAssociatesCount);
+							userData.put(loggedInUserDetails);
+
+							jsonObject.put("loggedUserData", userData);
+
+							List<Long> lstData = UserDetailsLocalServiceUtil.getDRNameList(type,
+									Long.parseLong(themeDisplay.getUser().getJobTitle()), country);
+							JSONArray userJournalDataJsonArray = null;
+							
+							String serilizeString = null;
+							if (Validator.isNotNull(lstData)) {
+								JSONArray immediateDRUserDataArray = JSONFactoryUtil.createJSONArray();
+								for (Long empId : lstData) {
+									JSONObject label = JSONFactoryUtil.createJSONObject();
+									long associateCount = 0;
+									long associateCompletedCount = 0;
+									String DRBudgetUtilization = null;
+									List<User> lstUser = new ArrayList<User>();
+									try {
+										lstUser = UserDetailsLocalServiceUtil.getUserByEmployeeId(Long.toString(empId));
+									} catch (Exception e) {
+										// TODO Auto-generated catch block
+										e.printStackTrace();
+									}
+									try {
+										if (Validator.isNotNull(lstData) && lstData.size() > 0) {
+											label.put("userName", lstUser.get(0).getFullName());
+											label.put("profilePic", lstUser.get(0).getPortraitURL(themeDisplay));
+											label.put("employeeId", lstUser.get(0).getJobTitle());
+											List<UserDetails> lstUserDetails = new ArrayList<UserDetails>();
+											lstUserDetails = UserDetailsLocalServiceUtil.getAssocitesList(type,
+													Long.parseLong(themeDisplay.getUser().getJobTitle()), country,
+													Long.parseLong(lstUser.get(0).getJobTitle()));
+											
+											if (Validator.isNotNull(lstUserDetails) && lstUserDetails.size() > 0) {
+												associateCount = lstUserDetails.size();
+											}
+											label.put("associateCount", associateCount);
+
+											associateCompletedCount = ManagerResponseLocalServiceUtil
+													.getManagerResponseCountByRole(
+															Long.parseLong(lstUser.get(0).getJobTitle()), DRType,
+															country, lstAssociateIds);
+											label.put("associateCompletedCount", associateCompletedCount);
+
+											List<UserDetails> lstDrsUsers = UserDetailsLocalServiceUtil
+													.getAssocitesList(type,
+															Long.parseLong(themeDisplay.getUser().getJobTitle()),
+															country, Long.parseLong(lstUser.get(0).getJobTitle()));
+											List<Long> lstDRAssociateIds = new ArrayList<Long>();
+											if (Validator.isNotNull(lstDrsUsers) && lstDrsUsers.size() > 0) {
+												for (UserDetails userDetails : lstDrsUsers) {
+													lstDRAssociateIds.add(userDetails.getAssociateId());
+												}
+											}
+											if (Validator.isNotNull(lstDRAssociateIds)
+													&& lstDRAssociateIds.size() > 0) {
+												DRBudgetUtilization = ManagerResponseLocalServiceUtil
+														.getBudgetUtilization(DRType,
+																Long.parseLong(lstUser.get(0).getJobTitle()), country,
+																lstDRAssociateIds);
+											}
+											label.put("DRBudgetUtilization",
+													df.format(Double.parseDouble(DRBudgetUtilization)));
+											immediateDRUserDataArray.put(label);
+										}
+									} catch (Exception e) {
+										// TODO Auto-generated catch block
+										e.printStackTrace();
+									}
+								}
+
+								jsonObject.put("immediateDRUserData", immediateDRUserDataArray);
+
+							} else {
+								logger.info("The respomse null");
+							}
+
+						}
+
+					} else if (StringUtil.equalsIgnoreCase(action, "loadRecoTable")) {
+
+						logger.info("Action  Inside<<  " + action);
+						int type = ParamUtil.getInteger(resourceRequest, "type", 0);
+						String country = ParamUtil.getString(resourceRequest, "country", null);
+						String managerEmployeeId = ParamUtil.getString(resourceRequest, "managerId", null);
+						boolean isReqForLoggedUser = ParamUtil.getBoolean(resourceRequest, "isLoggedInUser");
+
+						if (Validator.isNotNull(managerEmployeeId) && Validator.isNotNull(country) && type != 0
+								&& !managerEmployeeId.isEmpty() && !country.isEmpty()) {
+
+							if (country.equalsIgnoreCase("ALL")) {
+								country = null;
+							}
+
+							double TRPerIncReco = 0;
+							double TRPromoReco = 0;
+							double TRTop100Reco = 0;
+							double TRMarketFitmentReco = 0;
+							double TRMTFitmentReco = 0;
+							double TRDiversityReco = 0;
+							double TRManagementTraineeReco = 0;
+							double TRlateralReco = 0;
+
+							JSONArray serviceLineJsonArray = JSONFactoryUtil.createJSONArray();
+
+							double managerPerIncReco = 0;
+							double managerPromoReco = 0;
+							double managerTop100Reco = 0;
+							double managerMarketFitmentReco = 0;
+							double managerMTFitmentReco = 0;
+							double managerDiversityReco = 0;
+							double managerManagementTraineeReco = 0;
+							double managerLateralReco = 0;
+
+							double perIncRecoPercentage = 0;
+							double promoRecoPercentage = 0;
+							double top100RecoPercentage = 0;
+							double marketFitmentRecoPercentage = 0;
+							double mTFitmentRecoPercentage = 0;
+							double diversityRecoPercentage = 0;
+							double managementTraineeRecoPercentage = 0;
+							double lateralRecoPercentage = 0;
+
+							
+							
+							boolean isGeetingDataForLoggedInUser = false;
+							int DRType = 0;
+							if (type == ManagerUpType.FOURTH_UP_MANSGER) {
+								DRType = ManagerUpType.THIRD_UP_MANSGER;
+							} else if (type == ManagerUpType.THIRD_UP_MANSGER) {
+								DRType = ManagerUpType.SECOND_UP_MANSGER;
+							} else if (type == ManagerUpType.SECOND_UP_MANSGER) {
+								DRType = ManagerUpType.FIRST_UP_MANSGER;
+							} else if (type == ManagerUpType.FIRST_UP_MANSGER) {
+							}
+							List<UserDetails> lstAssociates = new ArrayList<UserDetails>();
+							List<ManagerResponse> lstManagerResponse = new ArrayList<ManagerResponse>();
+
+							double totalAssociatesManagerByRole = 0;
+							double totalAssociatesResponseManagerByRole = 0;
+							double totalAssociatesPendingResponseManagerByRole = 0;
+							double totalAssociatesResponseAboveTRDevManagerByRole = 0;
+							double totalAssociatesResponseBelowTRDevManagerByRole = 0;
+							double totalAssociatesResponseWithinTRDevManagerByRole = 0;
+
+							try {
+								if ((Long.parseLong(themeDisplay.getUser().getJobTitle()) == Long
+										.parseLong(managerEmployeeId)) && isReqForLoggedUser) {
+									lstAssociates = UserDetailsLocalServiceUtil.getAssocitesList(type,
+											Long.parseLong(themeDisplay.getUser().getJobTitle()), country, 0);
+									lstManagerResponse = ManagerResponseLocalServiceUtil.getManagerResponseByRole(
+											Long.parseLong(themeDisplay.getUser().getJobTitle()), type, country);
+									isGeetingDataForLoggedInUser = true;
+								} else {
+									lstAssociates = UserDetailsLocalServiceUtil.getAssocitesList(type,
+											Long.parseLong(themeDisplay.getUser().getJobTitle()), country,
+											Long.parseLong(managerEmployeeId));
+									lstManagerResponse = ManagerResponseLocalServiceUtil.getManagerResponseByRole(
+											Long.parseLong(managerEmployeeId), DRType, country);
+								}
+								
+
+								List<Long> lstDRAssociateIds = new ArrayList<Long>();
+								List<Long> lstMTAssociateIds = new ArrayList<Long>();
+								List<Long> lstLateralAssociateIds = new ArrayList<Long>();
+								if (Validator.isNotNull(lstAssociates) && lstAssociates.size() > 0) {
+									totalAssociatesManagerByRole = lstAssociates.size();
+									for (UserDetails userDetails : lstAssociates) {
+										lstDRAssociateIds.add(userDetails.getAssociateId());
+										if (userDetails.getHiredAsLateralMT()
+												.equalsIgnoreCase(RecoType.MANAGEMENT_TRAINEE_LATERAL)) {
+											lstLateralAssociateIds.add(userDetails.getAssociateId());
+										} else if (userDetails.getHiredAsLateralMT()
+												.equalsIgnoreCase(RecoType.MANAGEMENT_TRAINEE_MT)) {
+											lstMTAssociateIds.add(userDetails.getAssociateId());
+										}
+									}
+									List<String> stringValues = lstDRAssociateIds.stream().map(Object::toString)
+											.collect(Collectors.toList());
+									String lsEmpIds = String.join(",", stringValues);
+									/*--------------- Budget Utilization By service Line ----------------- */
+									serviceLineJsonArray = DashboardUtil.getBudgetUtilizationEmployeeOwnershipList(type, Long.parseLong(themeDisplay.getUser().getJobTitle()), country,
+											lsEmpIds, Long.parseLong(managerEmployeeId),isReqForLoggedUser);
+									/*--------------- Budget Utilization By service Line ----------------- */
+								}
+								 jsonObject.put("serviceLineJsonArray", serviceLineJsonArray);
+                                 //logger.info("lstDRAssociateIds "+lstDRAssociateIds.size());
+
+								TRPerIncReco = UserDetailsLocalServiceUtil
+										.getTotalTRRecoForAssociates(lstDRAssociateIds, RecoType.PERFOMRANCE_INC_RECO);
+								TRPromoReco = UserDetailsLocalServiceUtil.getTotalTRRecoForAssociates(lstDRAssociateIds,
+										RecoType.PROMOTION_INC_RECO);
+								TRTop100Reco = UserDetailsLocalServiceUtil.getTotalTRRecoForAssociates(lstDRAssociateIds,
+										RecoType.TOP100_RECO);
+								TRMTFitmentReco = UserDetailsLocalServiceUtil
+										.getTotalTRRecoForAssociates(lstDRAssociateIds, RecoType.MTFITMENT_RECO);
+								TRMarketFitmentReco = UserDetailsLocalServiceUtil
+										.getTotalTRRecoForAssociates(lstDRAssociateIds, RecoType.MARKET_FITMENT_RECO);
+								TRDiversityReco = UserDetailsLocalServiceUtil
+										.getTotalTRRecoForAssociates(lstDRAssociateIds, RecoType.DIVERSITY_RECO);
+								TRManagementTraineeReco = UserDetailsLocalServiceUtil.getTotalTRRecoForAssociates(
+										lstMTAssociateIds, RecoType.MANAGEMENT_TRAINEE_LATERAL_RECO);
+								TRlateralReco = UserDetailsLocalServiceUtil.getTotalTRRecoForAssociates(
+										lstLateralAssociateIds, RecoType.MANAGEMENT_TRAINEE_LATERAL_RECO);
+								
+								//logger.info("TRMTFitmentReco "+TRMTFitmentReco);
+
+								if (isGeetingDataForLoggedInUser) {
+									managerPerIncReco = ManagerResponseLocalServiceUtil
+											.getTotalManagerRecoForAssociates(lstDRAssociateIds,
+													RecoType.PERFOMRANCE_INC_RECO, type,
+													Long.parseLong(managerEmployeeId));
+									managerPromoReco = ManagerResponseLocalServiceUtil.getTotalManagerRecoForAssociates(
+											lstDRAssociateIds, RecoType.PROMOTION_INC_RECO, type,
+											Long.parseLong(managerEmployeeId));
+									managerTop100Reco = ManagerResponseLocalServiceUtil.getTotalManagerRecoForAssociates(
+											lstDRAssociateIds, RecoType.TOP100_RECO, type, Long.parseLong(managerEmployeeId));
+									managerMTFitmentReco = ManagerResponseLocalServiceUtil
+											.getTotalManagerRecoForAssociates(lstDRAssociateIds,
+													RecoType.MTFITMENT_RECO, type, Long.parseLong(managerEmployeeId));
+									managerMarketFitmentReco = ManagerResponseLocalServiceUtil
+											.getTotalManagerRecoForAssociates(lstDRAssociateIds,
+													RecoType.MARKET_FITMENT_RECO, type,
+													Long.parseLong(managerEmployeeId));
+									managerDiversityReco = ManagerResponseLocalServiceUtil
+											.getTotalManagerRecoForAssociates(lstDRAssociateIds,
+													RecoType.DIVERSITY_RECO, type, Long.parseLong(managerEmployeeId));
+									managerManagementTraineeReco = ManagerResponseLocalServiceUtil
+											.getTotalManagerRecoForAssociates(lstMTAssociateIds,
+													RecoType.MANAGEMENT_TRAINEE_LATERAL_RECO, type,
+													Long.parseLong(managerEmployeeId));
+									managerLateralReco = ManagerResponseLocalServiceUtil
+											.getTotalManagerRecoForAssociates(lstLateralAssociateIds,
+													RecoType.MANAGEMENT_TRAINEE_LATERAL_RECO, type,
+													Long.parseLong(managerEmployeeId));
+								} else {
+									managerPerIncReco = ManagerResponseLocalServiceUtil
+											.getTotalManagerRecoForAssociates(lstDRAssociateIds,
+													RecoType.PERFOMRANCE_INC_RECO, DRType,
+													Long.parseLong(managerEmployeeId));
+									managerPromoReco = ManagerResponseLocalServiceUtil.getTotalManagerRecoForAssociates(
+											lstDRAssociateIds, RecoType.PROMOTION_INC_RECO, DRType,
+											Long.parseLong(managerEmployeeId));
+									managerTop100Reco = ManagerResponseLocalServiceUtil.getTotalManagerRecoForAssociates(
+											lstDRAssociateIds, RecoType.TOP100_RECO, DRType, Long.parseLong(managerEmployeeId));
+									managerMTFitmentReco = ManagerResponseLocalServiceUtil
+											.getTotalManagerRecoForAssociates(lstDRAssociateIds,
+													RecoType.MTFITMENT_RECO, DRType, Long.parseLong(managerEmployeeId));
+									managerMarketFitmentReco = ManagerResponseLocalServiceUtil
+											.getTotalManagerRecoForAssociates(lstDRAssociateIds,
+													RecoType.MARKET_FITMENT_RECO, DRType,
+													Long.parseLong(managerEmployeeId));
+									managerDiversityReco = ManagerResponseLocalServiceUtil
+											.getTotalManagerRecoForAssociates(lstDRAssociateIds,
+													RecoType.DIVERSITY_RECO, DRType, Long.parseLong(managerEmployeeId));
+									managerManagementTraineeReco = ManagerResponseLocalServiceUtil
+											.getTotalManagerRecoForAssociates(lstMTAssociateIds,
+													RecoType.MANAGEMENT_TRAINEE_LATERAL_RECO, DRType,
+													Long.parseLong(managerEmployeeId));
+									managerLateralReco = ManagerResponseLocalServiceUtil
+											.getTotalManagerRecoForAssociates(lstLateralAssociateIds,
+													RecoType.MANAGEMENT_TRAINEE_LATERAL_RECO, DRType,
+													Long.parseLong(managerEmployeeId));
+								}
+
+								/*
+								 * double totalTrReco = 0; double totalManagerReco = 0; double toatlPercentage =
+								 * 0;
+								 */ DecimalFormat df = new DecimalFormat("0.00");
+								if (TRPerIncReco > 0) {
+									perIncRecoPercentage = (managerPerIncReco / TRPerIncReco) * 100;
+									/*
+									 * totalTrReco+=TRPerIncReco; totalManagerReco+=managerPerIncReco;
+									 */
+								}
+								if (TRPromoReco > 0) {
+									promoRecoPercentage = (managerPromoReco / TRPromoReco) * 100;
+									/*
+									 * totalTrReco+=TRPromoReco; totalManagerReco+=managerPromoReco;
+									 */
+								}
+								if (TRTop100Reco > 0)
+								{
+									top100RecoPercentage = (managerTop100Reco / TRTop100Reco) * 100;
+								}
+								if (TRMTFitmentReco > 0) {
+									mTFitmentRecoPercentage = (managerMTFitmentReco / TRMTFitmentReco) * 100;
+									/*
+									 * totalTrReco+=TRMTFitmentReco; totalManagerReco+=managerMTFitmentReco;
+									 */
+								}
+								if (TRMarketFitmentReco > 0) {
+									marketFitmentRecoPercentage = (managerMarketFitmentReco / TRMarketFitmentReco)
+											* 100;
+									/*
+									 * totalTrReco+=TRMarketFitmentReco; totalManagerReco+=
+									 * managerMarketFitmentReco;
+									 */
+								}
+								if (TRDiversityReco > 0) {
+									diversityRecoPercentage = (managerDiversityReco / TRDiversityReco) * 100;
+									/*
+									 * totalTrReco+=TRDiversityReco; totalManagerReco+=managerDiversityReco;
+									 */
+								}
+
+								if (TRManagementTraineeReco > 0) {
+									managementTraineeRecoPercentage = (managerManagementTraineeReco
+											/ TRManagementTraineeReco) * 100;
+								}
+
+								if (TRlateralReco > 0) {
+									lateralRecoPercentage = (managerLateralReco / TRlateralReco) * 100;
+								}
+
+								/*
+								 * if(totalTrReco > 0) { toatlPercentage=(totalManagerReco/totalTrReco )*100; }
+								 */
+								
+								double totalTRReco=0;
+								double totalManagerReco=0;
+								
+								double totalPercentage=0; 
+								
+								totalTRReco=TRPerIncReco+TRPromoReco+TRMTFitmentReco+TRMarketFitmentReco+TRDiversityReco+TRTop100Reco;
+								totalManagerReco=managerPerIncReco+managerPromoReco+managerMTFitmentReco+managerMarketFitmentReco+managerDiversityReco+managerTop100Reco;
+								
+								
+								
+								if (totalTRReco > 0) {
+									totalPercentage = (totalManagerReco / totalTRReco) * 100;
+								}
+								
+								
+										
+								JSONObject totalIncBudget = JSONFactoryUtil.createJSONObject();
+								totalIncBudget.put("name", "Total Increment Budget");
+								totalIncBudget.put("TRPerInc", df.format(totalTRReco));
+								totalIncBudget.put("managerPerInc", df.format(totalManagerReco));
+								totalIncBudget.put("percentage", df.format(totalPercentage) + StringPool.PERCENT);
+								jsonArray.put(totalIncBudget);
+								
+								JSONObject perIncJsonObj = JSONFactoryUtil.createJSONObject();
+								perIncJsonObj.put("name", "Performance Increment");
+								perIncJsonObj.put("TRPerInc", df.format(TRPerIncReco));
+								perIncJsonObj.put("managerPerInc", df.format(managerPerIncReco));
+								perIncJsonObj.put("percentage", df.format(perIncRecoPercentage) + StringPool.PERCENT);
+								jsonArray.put(perIncJsonObj);
+
+								JSONObject promoJsonObj = JSONFactoryUtil.createJSONObject();
+								promoJsonObj.put("name", "Promotion Increment");
+								promoJsonObj.put("TRPerInc", df.format(TRPromoReco));
+								promoJsonObj.put("managerPerInc", df.format(managerPromoReco));
+								promoJsonObj.put("percentage", df.format(promoRecoPercentage) + StringPool.PERCENT);
+								jsonArray.put(promoJsonObj);
+								
+								JSONObject top100JsonObj = JSONFactoryUtil.createJSONObject();
+								top100JsonObj.put("name", "Top 100 Increment");
+								top100JsonObj.put("TRPerInc", df.format(TRTop100Reco));
+								top100JsonObj.put("managerPerInc", df.format(managerTop100Reco));
+								top100JsonObj.put("percentage", df.format(top100RecoPercentage) + StringPool.PERCENT);
+								jsonArray.put(top100JsonObj);
+
+								JSONObject MTJsonObj = JSONFactoryUtil.createJSONObject();
+								MTJsonObj.put("name", "Mgmt. Trainee Fitment");
+								MTJsonObj.put("TRPerInc", df.format(TRMTFitmentReco));
+								MTJsonObj.put("managerPerInc", df.format(managerMTFitmentReco));
+								MTJsonObj.put("percentage", df.format(mTFitmentRecoPercentage) + StringPool.PERCENT);
+								jsonArray.put(MTJsonObj);
+
+								JSONObject marketJsonObj = JSONFactoryUtil.createJSONObject();
+								marketJsonObj.put("name", "Market Fitment");
+								marketJsonObj.put("TRPerInc", df.format(TRMarketFitmentReco));
+								marketJsonObj.put("managerPerInc", df.format(managerMarketFitmentReco));
+								marketJsonObj.put("percentage",
+										df.format(marketFitmentRecoPercentage) + StringPool.PERCENT);
+								jsonArray.put(marketJsonObj);
+
+								JSONObject diversityJsonObj = JSONFactoryUtil.createJSONObject();
+								diversityJsonObj.put("name", "EP Fitment");
+								diversityJsonObj.put("TRPerInc", df.format(TRDiversityReco));
+								diversityJsonObj.put("managerPerInc", df.format(managerDiversityReco));
+								diversityJsonObj.put("percentage",
+										df.format(diversityRecoPercentage) + StringPool.PERCENT);
+								jsonArray.put(diversityJsonObj);
+								
+
+
+								JSONObject managementTraineeJsonObj = JSONFactoryUtil.createJSONObject();
+								managementTraineeJsonObj.put("name", "Employees Tagged as Mgmt. Trainees");
+								managementTraineeJsonObj.put("TRPerInc", df.format(TRManagementTraineeReco));
+								managementTraineeJsonObj.put("managerPerInc", df.format(managerManagementTraineeReco));
+								managementTraineeJsonObj.put("percentage",
+										df.format(managementTraineeRecoPercentage) + StringPool.PERCENT);
+								jsonArray.put(managementTraineeJsonObj);
+
+								JSONObject lateralJsonObj = JSONFactoryUtil.createJSONObject();
+								lateralJsonObj.put("name", "Employees Tagged as Laterals");
+								lateralJsonObj.put("TRPerInc", df.format(TRlateralReco));
+								lateralJsonObj.put("managerPerInc", df.format(managerLateralReco));
+								lateralJsonObj.put("percentage", df.format(lateralRecoPercentage) + StringPool.PERCENT);
+								jsonArray.put(lateralJsonObj);
+								/*
+								 * JSONObject totalJsonObj=JSONFactoryUtil.createJSONObject ();
+								 * totalJsonObj.put("name", "Total"); totalJsonObj.put("TRPerInc",
+								 * df.format(totalTrReco)); totalJsonObj.put("managerPerInc",
+								 * df.format(totalManagerReco)); totalJsonObj.put("percentage",
+								 * df.format(toatlPercentage)+StringPool.PERCENT ); jsonArray.put(totalJsonObj);
+								 */
+
+								jsonObject.put("finalRecoArray", jsonArray);
+							} catch (Exception e1) {
+								e1.printStackTrace();
+							}
+
+							try {
+								double percetagePending = 0;
+								double percetageWithin = 0;
+								double percetageAbove = 0;
+								double percetageBelow = 0;
+
+								if (Validator.isNotNull(lstManagerResponse) && lstManagerResponse.size() > 0) {
+									totalAssociatesResponseManagerByRole = lstManagerResponse.size();
+									for (ManagerResponse managerResponse : lstManagerResponse) {
+										if (Validator.isNotNull(managerResponse)) {
+											double deviation = managerResponse.getDeviation();
+											UserDetails userDetails = UserDetailsLocalServiceUtil
+													.getUserDetails(managerResponse.getAssociateId());
+											if (Validator.isNotNull(userDetails)) {
+												String todalDeviation = userDetails.getDeviationAllowed()
+														.replaceAll("^\"|\"$", "");
+												if (deviation > 0) {
+													if (Double.valueOf(todalDeviation.replace("%", "")) >= deviation) {
+														totalAssociatesResponseWithinTRDevManagerByRole += 1;
+													} else {
+														totalAssociatesResponseAboveTRDevManagerByRole += 1;
+													}
+												} else if (deviation < 0) {
+													if (Double.valueOf(todalDeviation.replace("%", "")) >= Math
+															.abs(deviation)) {
+														totalAssociatesResponseWithinTRDevManagerByRole += 1;
+													} else {
+														totalAssociatesResponseBelowTRDevManagerByRole += 1;
+													}
+												} else {
+													totalAssociatesResponseWithinTRDevManagerByRole += 1;
+												}
+											}
+
+										}
+									}
+								}
+
+								totalAssociatesPendingResponseManagerByRole = totalAssociatesManagerByRole
+										- totalAssociatesResponseManagerByRole;
+
+								if (totalAssociatesManagerByRole > 0) {
+									percetagePending = (totalAssociatesPendingResponseManagerByRole
+											/ totalAssociatesManagerByRole) * 100;
+									percetageWithin = (totalAssociatesResponseWithinTRDevManagerByRole
+											/ totalAssociatesManagerByRole) * 100;
+									percetageAbove = (totalAssociatesResponseAboveTRDevManagerByRole
+											/ totalAssociatesManagerByRole) * 100;
+									percetageBelow = (totalAssociatesResponseBelowTRDevManagerByRole
+											/ totalAssociatesManagerByRole) * 100;
+								}
+
+								JSONArray jsonArrayDeviation = JSONFactoryUtil.createJSONArray();
+								JSONObject jsonObjPendingDev = JSONFactoryUtil.createJSONObject();
+								jsonObjPendingDev.put("name", ZenMeUtilizationPortletKeys.PENDING);
+								jsonObjPendingDev.put("y", percetagePending);
+								jsonArrayDeviation.put(jsonObjPendingDev);
+
+								JSONObject jsonObjWithinDev = JSONFactoryUtil.createJSONObject();
+								jsonObjWithinDev.put("name", ZenMeUtilizationPortletKeys.DEVIATION_WITHIN);
+								jsonObjWithinDev.put("y", percetageWithin);
+								jsonArrayDeviation.put(jsonObjWithinDev);
+
+								JSONObject jsonObjAboveDev = JSONFactoryUtil.createJSONObject();
+								jsonObjAboveDev.put("name", ZenMeUtilizationPortletKeys.DEVIATION_ABOVE);
+								jsonObjAboveDev.put("y", percetageAbove);
+								jsonArrayDeviation.put(jsonObjAboveDev);
+
+								JSONObject jsonObjBelowDev = JSONFactoryUtil.createJSONObject();
+								jsonObjBelowDev.put("name", ZenMeUtilizationPortletKeys.DEVIATION_BELOW);
+								jsonObjBelowDev.put("y", percetageBelow);
+								jsonArrayDeviation.put(jsonObjBelowDev);
+
+								jsonObject.put("chartdata", jsonArrayDeviation);
+
+							} catch (Exception e) {
+								e.printStackTrace();
+							}
+						}
+					}
+				}
+
+				PrintWriter printWriter = null;
+				try {
+					printWriter = resourceResponse.getWriter();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+				resourceResponse.setContentType(ContentTypes.APPLICATION_JSON);
+				if (Validator.isNotNull(printWriter)) {
+					printWriter.println(jsonObject.toJSONString());
+				}
+				printWriter.close();
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+		}
+		super.serveResource(resourceRequest, resourceResponse);
+	}
+
+	public List<String> getCountryListByManager(long managerId) {
+
+		try {
+			DynamicQuery query = UserDetailsLocalServiceUtil.dynamicQuery();
+
+			Disjunction disjunction = RestrictionsFactoryUtil.disjunction();
+			disjunction.add(RestrictionsFactoryUtil.eq("firstUp", managerId));
+			disjunction.add(RestrictionsFactoryUtil.eq("secondUp", managerId));
+			disjunction.add(RestrictionsFactoryUtil.eq("thirdUp", managerId));
+			disjunction.add(RestrictionsFactoryUtil.eq("fourthUp", managerId));
+			query.add(disjunction);
+			query.setProjection(ProjectionFactoryUtil.distinct(ProjectionFactoryUtil.property("country")));
+			query.addOrder(OrderFactoryUtil.asc("country"));
+			List<Object> users = UserDetailsLocalServiceUtil.dynamicQuery(query);
+			if (Validator.isNotNull(users)) {
+				List<String> countries = new ArrayList<>();
+				users.forEach(obj -> {
+					if (Validator.isNotNull(obj)) {
+						countries.add(obj.toString());
+					}
+				});
+				return countries;
+			}
+		} catch (Exception e) {
+		}
+		return null;
+	}
+
+
+}
