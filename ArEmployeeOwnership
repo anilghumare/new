@@ -1,0 +1,749 @@
+package com.zen.asr.portlet;
+
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import javax.portlet.Portlet;
+import javax.portlet.PortletException;
+import javax.portlet.RenderRequest;
+import javax.portlet.RenderResponse;
+import javax.portlet.ResourceRequest;
+import javax.portlet.ResourceResponse;
+
+import org.osgi.service.component.annotations.Component;
+
+import com.liferay.petra.string.StringPool;
+import com.liferay.portal.kernel.exception.PortalException;
+import com.liferay.portal.kernel.json.JSONArray;
+import com.liferay.portal.kernel.json.JSONFactoryUtil;
+import com.liferay.portal.kernel.json.JSONObject;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.portlet.bridges.mvc.MVCPortlet;
+/**
+ * @Date : 8 May, 2023 17:17:32 PM
+ * @User : MG68616
+ * TODO : TODO
+ */
+import com.liferay.portal.kernel.theme.ThemeDisplay;
+import com.liferay.portal.kernel.util.ContentTypes;
+import com.liferay.portal.kernel.util.ParamUtil;
+import com.liferay.portal.kernel.util.StringUtil;
+import com.liferay.portal.kernel.util.Validator;
+import com.liferay.portal.kernel.util.WebKeys;
+import com.zen.asr.constants.MEUtilizationWebKeys;
+import com.zen.asr.util.DashboardUtil;
+import com.zen.asr.util.EmployeeOwnershipUtilizationUtil;
+
+import zen.me.service.constant.ManagerUpType;
+import zen.me.service.constant.UserDetailsFilterColumn;
+import zen.me.service.model.ColumnFilter;
+import zen.me.service.model.UserDetails;
+import zen.me.service.service.ColumnFilterLocalServiceUtil;
+import zen.me.service.service.UserDetailsLocalServiceUtil;
+/**
+ * @Date : 5 May, 2023 12:40:32 PM
+ * @User : MG68616
+ * TODO : TODO
+ */
+
+
+@Component(immediate = true, property = { "com.liferay.portlet.display-category=ME Portal",
+		"com.liferay.portlet.instanceable=true", "javax.portlet.display-name=ZenAREmployeeOwnershipUtilization",
+		"javax.portlet.init-param.template-path=/", "javax.portlet.init-param.view-template=/arEmployeeOwnershipUtilization/view.jsp",
+		"javax.portlet.name=Zen AR Employee Ownership Utilization",
+		"com.liferay.portlet.footer-portlet-javascript=/js/arEmployeeOwnershipUtilization.js",
+		"javax.portlet.resource-bundle=content.Language", "javax.portlet.security-role-ref=power-user,user",
+		"com.liferay.portlet.requires-namespaced-parameters=false" }, service = Portlet.class)
+public class AREmployeeOwnershipUtilizationPortlet extends MVCPortlet{
+	
+	private static Log logger = LogFactoryUtil.getLog(AREmployeeOwnershipUtilizationPortlet.class);
+
+	@Override
+	public void doView(RenderRequest renderRequest, RenderResponse renderResponse)
+			throws IOException, PortletException {
+		// TODO Auto-generated method stub
+		super.doView(renderRequest, renderResponse);
+	}
+	
+	@Override
+	public void serveResource(ResourceRequest resourceRequest, ResourceResponse resourceResponse)
+			throws IOException, PortletException {
+		// TODO Auto-generated method stub
+		ThemeDisplay themeDisplay = (ThemeDisplay) resourceRequest.getAttribute(WebKeys.THEME_DISPLAY);
+		if (Validator.isNotNull(themeDisplay) && themeDisplay.isSignedIn()) {
+			long employeeId = Long.parseLong(themeDisplay.getUser().getJobTitle());
+			JSONObject jsonObject = JSONFactoryUtil.createJSONObject();
+
+			try {
+				
+				
+				ColumnFilter userType = null;
+				try {
+					userType = ColumnFilterLocalServiceUtil
+							.getColumnFilter(themeDisplay.getUser().getJobTitle().toString());
+				} catch (PortalException e2) {
+				}
+
+				List<UserDetails> allUsers = null;
+				//logger.info("The Column Filter type:"+userType);
+				if (Validator.isNotNull(userType)) {
+					if (!userType.getColumnName().trim().equalsIgnoreCase("ALL")) {
+						allUsers = UserDetailsLocalServiceUtil.getCountryUserList(userType.getColumnName());
+					} else {
+						allUsers = UserDetailsLocalServiceUtil.getCountryUserList(null);
+					}
+				}
+				
+				//logger.info("All User:"+allUsers);
+				String action = ParamUtil.getString(resourceRequest, "action", null);
+				logger.info("Action  <<  " + action);
+				JSONArray jsonArray = JSONFactoryUtil.createJSONArray();
+
+				if (Validator.isNotNull(action)) {
+					if (StringUtil.equalsIgnoreCase(action, "laodUPType")) {
+						logger.info("Action  Inside<<  " + action);
+						String country = ParamUtil.getString(resourceRequest, "country", null);
+						int managerupType = ParamUtil.getInteger(resourceRequest, "managerUpType", 1);
+						String companyVbu=ParamUtil.getString(resourceRequest, "companyVbu",null);
+						
+						JSONArray countries = JSONFactoryUtil.createJSONArray();
+						
+						List<String> countriesList = new ArrayList<String>();
+						String countryVal = null;
+						if(Validator.isNotNull(allUsers) && allUsers.size() > 0) {
+							for (UserDetails users : allUsers) {
+								countryVal = users.getCountry();
+								countriesList.add(countryVal);
+							}
+						}
+						
+						if (Validator.isNotNull(countriesList)) {
+							countriesList.forEach(c -> {
+								countries.put(c);
+							});
+						}
+						
+						Set<String> UniqueCountries = new HashSet<String>(countriesList);
+						if (Validator.isNotNull(UniqueCountries)) {
+							UniqueCountries.forEach(c -> {
+								countries.put(c);
+							});
+						}
+
+						try {
+							if (Validator.isBlank(country) || Validator.isNull(country)) {
+								country = UniqueCountries.iterator().next();
+							}
+						} catch (Exception e) {
+						}
+
+						if (country.equalsIgnoreCase("ALL")) {
+							country = null;
+						}
+						long firstUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+								Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.FIRST_UP_MANSGER,
+								country);
+						long secounUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+								Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.SECOND_UP_MANSGER,
+								country);
+						long thirdUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+								Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.THIRD_UP_MANSGER,
+								country);
+						long fourthUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+								Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.FOURTH_UP_MANSGER,
+								country);
+						JSONArray data = JSONFactoryUtil.createJSONArray();
+						JSONArray replicateArray = JSONFactoryUtil.createJSONArray();
+
+						JSONObject object = JSONFactoryUtil.createJSONObject();
+						replicateArray.put(object);
+						if (firstUpCount >= 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							object.put("key", 1);
+							object.put("data", "1Up");
+							data.put(object);
+							replicateArray.put(object);
+						}
+						if (secounUpCount >= 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							object.put("key", 2);
+							object.put("data", "2Up");
+							data.put(object);
+							replicateArray.put(object);
+						}
+						
+						
+						if (thirdUpCount >= 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							object.put("key", 3);
+							object.put("data", "3Up");
+							data.put(object);
+							replicateArray.put(object);
+						}
+						if (fourthUpCount >= 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							object.put("key", 4);
+							object.put("data", "4Up");
+							data.put(object);
+							replicateArray.put(object);
+						}
+						
+						List<Long> managerNamesList = new ArrayList<Long>();
+						managerNamesList = UserDetailsLocalServiceUtil.getManagerListByTypeByVBU(managerupType, country,companyVbu);
+						JSONArray managerNamesArray = JSONFactoryUtil.createJSONArray();
+						if (Validator.isNotNull(managerNamesList) && managerNamesList.size() > 0) {
+							if (Validator.isNotNull(managerNamesList)) {
+								managerNamesList.forEach(id -> {
+									try {
+										List<User> lstUser = new ArrayList<User>();
+										try {
+											lstUser = UserDetailsLocalServiceUtil.getUserByEmployeeId(Long.toString(id));
+										} catch (Exception e) {
+										}
+										
+										if(Validator.isNotNull(lstUser) && lstUser.size() > 0) {
+											JSONObject objectManager = JSONFactoryUtil.createJSONObject();
+											objectManager.put("data", lstUser.get(0).getFullName());
+											objectManager.put("key", lstUser.get(0).getJobTitle());
+											managerNamesArray.put(objectManager);
+										}
+										
+										
+									} catch (Exception e) {
+										// TODO Auto-generated catch block
+										e.printStackTrace();
+									}
+
+								});
+							}
+						}
+						
+							//logger.info("UniqueCountries"+UniqueCountries);
+							//logger.info("managerUPAccessArray"+data);
+							//logger.info("managerNamesArray"+managerNamesArray);
+						jsonObject.put("countriesList", UniqueCountries);
+						jsonObject.put("managerUPAccessArray", data);
+						jsonObject.put("managerNamesArray", managerNamesArray);
+				
+
+					} 
+					if (StringUtil.equalsIgnoreCase(action, "loadEmployeeOwnershipList")) {
+						
+						logger.info("Action  Inside<< loadEmployeeOwnershipList " + action);
+						String country = ParamUtil.getString(resourceRequest, "country", null);
+						//String managerEmployeeId = ParamUtil.getString(resourceRequest, "managerId", null);
+						//boolean isReqForLoggedUser = ParamUtil.getBoolean(resourceRequest, "isLoggedInUser");
+						String arSelManagerId = ParamUtil.getString(resourceRequest, "arSelManagerId", null);
+						logger.info("arSelManagerId "+arSelManagerId);
+						String companyVbu=ParamUtil.getString(resourceRequest, "companyVbu", null);
+						
+						
+						String filterDataArray = ParamUtil.getString(resourceRequest, "filterDataArray");
+						boolean isFilterApplied = ParamUtil.getBoolean(resourceRequest, "isFilterApplied");
+						int type = ParamUtil.getInteger(resourceRequest, "type", 0);
+						String tenureInCurrentGrade = StringPool.BLANK;
+						String resignationStatus = StringPool.BLANK;
+						String customers = StringPool.BLANK;
+						String performerType = StringPool.BLANK;
+						String location = StringPool.BLANK;
+						String gender = StringPool.BLANK;
+						String project = StringPool.BLANK;
+						String grade = StringPool.BLANK;
+						String topTalent = StringPool.BLANK;
+						String top100 = StringPool.BLANK;
+						List<String> gradeArrayList = new ArrayList<String>();
+						String Niche = StringPool.BLANK;
+					    JSONArray filterJSONArray  = null;
+					    int DRType = 0;
+						if (type == ManagerUpType.FOURTH_UP_MANSGER) {
+							DRType = ManagerUpType.THIRD_UP_MANSGER;
+						} else if (type == ManagerUpType.THIRD_UP_MANSGER) {
+							DRType = ManagerUpType.SECOND_UP_MANSGER;
+						} else if (type == ManagerUpType.SECOND_UP_MANSGER) {
+							DRType = ManagerUpType.FIRST_UP_MANSGER;
+						} else if (type == ManagerUpType.FIRST_UP_MANSGER) {
+						}
+					
+					
+					    try {
+						    if(Validator.isNotNull(filterDataArray)) {
+								 filterJSONArray = JSONFactoryUtil.createJSONArray(filterDataArray);
+									if (Validator.isNotNull(filterJSONArray)) {
+										for (int i = 0; i < filterJSONArray.length(); i++) {
+												JSONObject object = filterJSONArray.getJSONObject(i);
+												tenureInCurrentGrade = object.getString("TenureInCurrentGrade");
+												resignationStatus = object.getString("resignationStatus");
+												customers = object.getString("customerName");
+												performerType = object.getString("performerType");
+												grade = object.getString("Grade");
+												gender = object.getString("Gender");
+												project = object.getString("project");
+												topTalent = object.getString("topTalent");
+												Niche = object.getString("Niche");
+												top100 = object.getString("top100");
+
+										}
+										if(Validator.isNotNull(grade)) {
+											   JSONArray gradeArray = JSONFactoryUtil.createJSONArray(grade);
+											   if(Validator.isNotNull(gradeArray) && gradeArray.length() >0) {
+												   for(int i = 0; i<= gradeArray.length()-1;i++ ) {
+													   gradeArrayList.add(gradeArray.getString(i));
+												   }
+											   }
+											}
+									}
+	
+						    }
+						  
+					    }catch(Exception e) {
+							logger.info(e.getMessage());
+						}
+
+						if (Validator.isNotNull(country) && type != 0) {
+							
+								if (country.equalsIgnoreCase("All")) {
+									country = null;
+								}
+								//logger.info("Type"+type);
+								//logger.info("DRType"+DRType);
+
+								JSONArray loggedUserData = 	EmployeeOwnershipUtilizationUtil.getEmpOwnershipUtilizatonArray(themeDisplay, Long.parseLong(arSelManagerId), country, type,isFilterApplied
+										,tenureInCurrentGrade,resignationStatus,customers,performerType,grade,project,gender,topTalent,Niche,DRType,companyVbu,null,null,true,top100);			
+								//String empOwnership = loggedUserData.getJSONObject(0).getString("employeeOwnershipName");
+								jsonObject.put("loggedUserData", loggedUserData);
+								//logger.info("logged USer Data"+loggedUserData);
+						}//if
+							
+						
+						
+					}else if (StringUtil.equalsIgnoreCase(action, "loadEmployeeOwnershipGradeTable")) { 
+
+						logger.info("Action  Inside<<  " + action);
+						int type = ParamUtil.getInteger(resourceRequest, "type", 0);
+						String country = ParamUtil.getString(resourceRequest, "country", null);
+						boolean isReqForLoggedUser = ParamUtil.getBoolean(resourceRequest, "isLoggedInUser");
+						String empOwnership = ParamUtil.getString(resourceRequest, "employeeOwnershipName", null);
+					    long managerId = ParamUtil.getLong(resourceRequest, "managerId",0);
+					   // logger.info("The Manager Id "+managerId);
+					    //logger.info("is Request for Logged User "+isReqForLoggedUser);
+					    long selectedManagerId = ParamUtil.getLong(resourceRequest, "selectedManagerId",0);
+
+						String filterDataArray = ParamUtil.getString(resourceRequest, "filterDataArray");
+						boolean isFilterApplied = ParamUtil.getBoolean(resourceRequest, "isFilterApplied");
+						String tenureInCurrentGrade = StringPool.BLANK;
+						String resignationStatus = StringPool.BLANK;
+						String performerType = StringPool.BLANK;
+						String gender = StringPool.BLANK;
+						String customers = StringPool.BLANK;
+						String filterGrade = StringPool.BLANK;
+						String project = StringPool.BLANK;
+						String topTalent = StringPool.BLANK;
+						String top100 = StringPool.BLANK;
+						String Niche = StringPool.BLANK;
+						List<String> filterGradeArray = new ArrayList<String>();
+
+						JSONArray promotionEligibleGradeArray = JSONFactoryUtil.createJSONArray();
+						List<String> gradeList = new ArrayList<String>();
+						
+						//logger.info("The Customer name :"+customerName);
+						//logger.info("Filter Applied in LOAD PROMOTION GRADE TABLE:"+isFilterApplied);
+						
+						try {
+						JSONArray filterJSONArray = JSONFactoryUtil.createJSONArray(filterDataArray);
+							if (Validator.isNotNull(filterJSONArray)) {
+								for (int i = 0; i < filterJSONArray.length(); i++) {
+									JSONObject object = filterJSONArray.getJSONObject(i);
+									tenureInCurrentGrade = object.getString("TenureInCurrentGrade");
+									resignationStatus = object.getString("resignationStatus");
+									customers = object.getString("customerName");
+									performerType = object.getString("performerType");
+									filterGrade = object.getString("Grade");
+									gender = object.getString("Gender");
+									project = object.getString("project");
+									topTalent = object.getString("topTalent");
+									top100 = object.getString("top100");
+									Niche = object.getString("Niche");
+								}
+								
+								if(Validator.isNotNull(filterGrade)) {
+									   JSONArray gradeArray = JSONFactoryUtil.createJSONArray(filterGrade);
+									   if(Validator.isNotNull(gradeArray) && gradeArray.length() >0) {
+										   for(int i = 0; i<= gradeArray.length()-1;i++ ) {
+											   filterGradeArray.add(gradeArray.getString(i));
+										   }
+									   }
+									}
+							}
+							
+							
+						}catch(Exception e) {
+							logger.info(e.getMessage());
+						}
+						 int DRType = 0;
+							if (type == ManagerUpType.FOURTH_UP_MANSGER) {
+								DRType = ManagerUpType.THIRD_UP_MANSGER;
+							} else if (type == ManagerUpType.THIRD_UP_MANSGER) {
+								DRType = ManagerUpType.SECOND_UP_MANSGER;
+							} else if (type == ManagerUpType.SECOND_UP_MANSGER) {
+								DRType = ManagerUpType.FIRST_UP_MANSGER;
+							} else if (type == ManagerUpType.FIRST_UP_MANSGER) {
+							}
+
+						if ( Validator.isNotNull(country) && type != 0 && !country.isEmpty()) {
+
+							if (country.equalsIgnoreCase("All")) {
+								country = null;
+							}
+							
+							try {
+//								if(!isFilterApplied && Validator.isNull(filterGrade) && filterGrade == "" ) {
+//								 gradeList = UserDetailsLocalServiceUtil.getDistinctEmployeeOwnershipCurrentGrade(0l, 0, country,null);
+//							    }
+								if(isFilterApplied && Validator.isNotNull(filterGrade) && filterGrade != "") {
+									gradeList = filterGradeArray;
+								}else {
+									 gradeList = UserDetailsLocalServiceUtil.getDistinctEmployeeOwnershipCurrentGrade(0l, 0, null,null);
+								}
+//								if(isFilterApplied && Validator.isNull(filterGrade) && filterGrade == "") {
+//									 gradeList = UserDetailsLocalServiceUtil.getDistinctEmployeeOwnershipCurrentGrade(0l, 0, country,null);
+//								}
+							}catch(Exception e) {
+								logger.info(e.getMessage());
+							}
+							
+							//logger.info("GradeList:"+gradeList);
+							//gradeList.remove("B2");
+								
+							if(Validator.isNotNull(gradeList) && gradeList.size() > 0) {
+							    Collections.sort(gradeList);
+							    double c1ToC2TotalEligibleCount = 0;
+							    double  c1ToC2TotalBudgetUtilization = 0;
+							    double c1ToC2TotalBudgetAllocation = 0;
+							    double c1ToC2TotalPerUtilization = 0;
+							    
+							    double e1AndBelowTotalEligibleCount = 0;
+							    double  e1AndBelowTotalBudgetUtilization = 0;
+							    double e1AndBelowTotalBudgetAllocation = 0;
+							    double e1AndBelowTotalPerUtilization = 0;
+							    
+							   // double othersTotalEligibleCount = 0;
+							   // double othersTotalBudgetUtilization = 0;
+							   // double othersTotalBudgetAllocation = 0;
+							   // double othersTotalPerUtilization = 0;
+							    
+							    JSONObject c1ToC2Object  = JSONFactoryUtil.createJSONObject();
+							    JSONObject e1AndBelowObjet = JSONFactoryUtil.createJSONObject();
+							   // JSONObject otherObject = JSONFactoryUtil.createJSONObject();
+							    JSONArray firstJSONArray = JSONFactoryUtil.createJSONArray();
+							    JSONArray secondJSONArray = JSONFactoryUtil.createJSONArray();
+							    JSONArray thirdJSONArray = JSONFactoryUtil.createJSONArray();
+
+							    int index = 0;
+								for(String grade: gradeList) {
+									try {
+										 JSONObject object = EmployeeOwnershipUtilizationUtil.loadEmployeeOwnershipGradeTable(selectedManagerId, type, country, grade,
+												 customers, project, gender, tenureInCurrentGrade, performerType, 
+											managerId,DRType,resignationStatus,isFilterApplied,isReqForLoggedUser,empOwnership,topTalent,Niche,null,null,top100);
+										  
+										if(grade.equals("C1") || grade.equals("C2") || grade.equals("D1") || grade.equals("D2")) {
+											index = index + 1;
+										    c1ToC2TotalEligibleCount = c1ToC2TotalEligibleCount +  object.getDouble("eligibleCount");
+											c1ToC2TotalBudgetUtilization = c1ToC2TotalBudgetUtilization + object.getDouble("budgetUtilized");
+											c1ToC2TotalBudgetAllocation = c1ToC2TotalBudgetAllocation + object.getDouble("budgetAllocated");
+											if(c1ToC2TotalBudgetUtilization > 0) {
+												c1ToC2TotalPerUtilization = ( c1ToC2TotalBudgetUtilization / c1ToC2TotalBudgetAllocation) * 100 ;
+											}
+											firstJSONArray.put(object);
+
+										}if(grade.equals("E1") || grade.equals("E2") || grade.equals("F1") || grade.equals("F2")) {
+
+											index = index + 1;
+											e1AndBelowTotalEligibleCount = e1AndBelowTotalEligibleCount +  object.getDouble("eligibleCount");
+											e1AndBelowTotalBudgetUtilization = e1AndBelowTotalBudgetUtilization + object.getDouble("budgetUtilized");
+											e1AndBelowTotalBudgetAllocation = e1AndBelowTotalBudgetAllocation + object.getDouble("budgetAllocated");
+											if(e1AndBelowTotalBudgetUtilization > 0) {
+												e1AndBelowTotalPerUtilization = ( e1AndBelowTotalBudgetUtilization/ e1AndBelowTotalBudgetAllocation) * 100 ;
+											}
+											secondJSONArray.put(object);
+										}
+										 if(!grade.equals("C1") && !grade.equals("C2") && !grade.equals("D1") && !grade.equals("D2")
+												   && !grade.equals("E1") && !grade.equals("E2") && !grade.equals("F1") && !grade.equals("F2")) {
+													thirdJSONArray.put(object);
+										 }
+									}catch(Exception e) {
+										logger.info(e.getMessage());
+									}
+								}// end of for
+								
+								 if(Validator.isNotNull(thirdJSONArray) && thirdJSONArray.length()  > 0) {
+                                 	for(int i = 0 ; i <= thirdJSONArray.length() -1; i++) {
+                                 		JSONObject thirdJSONObject = thirdJSONArray.getJSONObject(i);
+                                 		e1AndBelowTotalEligibleCount = e1AndBelowTotalEligibleCount +  thirdJSONObject.getDouble("eligibleCount");
+											e1AndBelowTotalBudgetUtilization = e1AndBelowTotalBudgetUtilization + thirdJSONObject.getDouble("budgetUtilized");
+											e1AndBelowTotalBudgetAllocation = e1AndBelowTotalBudgetAllocation + thirdJSONObject.getDouble("budgetAllocated");
+											if(e1AndBelowTotalBudgetUtilization > 0) {
+												e1AndBelowTotalPerUtilization = ( e1AndBelowTotalBudgetUtilization/ e1AndBelowTotalBudgetAllocation) * 100 ;
+											}
+                                 	}
+                                 }
+								
+								c1ToC2Object.put("currentGrade", "C1 to D2(Total)");
+                    			c1ToC2Object.put("count", 0);
+								c1ToC2Object.put("budgetUtilized", c1ToC2TotalBudgetUtilization);
+								c1ToC2Object.put("budgetAllocated", c1ToC2TotalBudgetAllocation);
+								c1ToC2Object.put("perUtilization", c1ToC2TotalPerUtilization);
+								c1ToC2Object.put("eligibleCount", c1ToC2TotalEligibleCount);
+								promotionEligibleGradeArray.put(c1ToC2Object);
+								  for (int i = 0; i < firstJSONArray.length(); i++) {
+									  promotionEligibleGradeArray.put(firstJSONArray.get(i));
+								    }
+								  
+							    e1AndBelowObjet.put("currentGrade", "E1 and below(Total)");
+								e1AndBelowObjet.put("count", index);
+								e1AndBelowObjet.put("budgetUtilized", e1AndBelowTotalBudgetUtilization);
+								e1AndBelowObjet.put("budgetAllocated", e1AndBelowTotalBudgetAllocation);
+								e1AndBelowObjet.put("perUtilization", e1AndBelowTotalPerUtilization);
+								e1AndBelowObjet.put("eligibleCount", e1AndBelowTotalEligibleCount);
+								promotionEligibleGradeArray.put(e1AndBelowObjet);
+								  for (int i = 0; i < secondJSONArray.length(); i++) {
+									  promotionEligibleGradeArray.put(secondJSONArray.get(i));
+								    }
+								  for (int i = 0; i < thirdJSONArray.length(); i++) {
+									  promotionEligibleGradeArray.put(thirdJSONArray.get(i));
+								    }
+							
+								jsonObject.put("totalPromotionArray", EmployeeOwnershipUtilizationUtil.loadTotalEmployeeOwnershipEligibleCount(promotionEligibleGradeArray.toString()));
+								jsonObject.put("promotionEligibleGradeArray", promotionEligibleGradeArray);
+								
+								//logger.info("promotionEligibleGradeArray "+promotionEligibleGradeArray);
+								//logger.info("totalPromotionArray "+EmployeeOwnershipUtilizationUtil.loadTotalEmployeeOwnershipEligibleCount(promotionEligibleGradeArray.toString()));
+
+							}
+						}
+			} //close else if
+					
+					else if (StringUtil.equalsIgnoreCase(action, "laodManagersList")) {
+						logger.info("Action  Inside<<  " + action);
+						String country = ParamUtil.getString(resourceRequest, "country", null);
+						//logger.info("country"+country);
+						int managerupType = ParamUtil.getInteger(resourceRequest, "managerUpType", 1);
+						//logger.info("managerupType"+managerupType);
+						String companyVbu=ParamUtil.getString(resourceRequest, "companyVbu",null);
+						//logger.info("companyVbu"+companyVbu);
+						
+						List<Long> managerNamesList = new ArrayList<Long>();
+						//logger.info("Country----"+country+"\t managerup Type-----"+managerupType);
+						//managerNamesList = UserDetailsLocalServiceUtil.getManagerListByType(managerupType, country);
+					    managerNamesList = UserDetailsLocalServiceUtil.getManagerListByTypeByVBU(managerupType, country,companyVbu);
+						//logger.info("manager list in load manager list-for type---"+managerupType+"---"+managerNamesList);
+						JSONArray managerNamesArray = JSONFactoryUtil.createJSONArray();
+						if (Validator.isNotNull(managerNamesList)) {
+							if (Validator.isNotNull(managerNamesList) && managerNamesList.size() > 0) {
+								managerNamesList.forEach(id -> {
+									try {
+										//UserDetails obj = UserDetailsLocalServiceUtil.getUserDetails(id);
+										List<User> lstUser = new ArrayList<User>();
+										try {
+											lstUser = UserDetailsLocalServiceUtil.getUserByEmployeeId(Long.toString(id));
+										} catch (Exception e) {
+										}
+										
+										if(Validator.isNotNull(lstUser) && lstUser.size() > 0) {
+											JSONObject objectManager = JSONFactoryUtil.createJSONObject();
+											objectManager.put("data", lstUser.get(0).getFullName());
+											objectManager.put("key", lstUser.get(0).getJobTitle());
+											managerNamesArray.put(objectManager);
+										}
+										
+									} catch (Exception e) {
+										// TODO Auto-generated catch block
+										e.printStackTrace();
+									}
+
+								});
+							}
+						}
+						
+
+						jsonObject.put("managerNamesArray", managerNamesArray);
+
+					}
+					
+					else if (StringUtil.equalsIgnoreCase(action, "loadUserDr")) {
+						//log.info("loaduserdr---------");
+						
+						int type = ParamUtil.getInteger(resourceRequest, "managerUp", 4);
+						String country = ParamUtil.getString(resourceRequest, "country", "India");
+						String companyVbu = ParamUtil.getString(resourceRequest, "companyVbu", "null");
+						
+						companyVbu=companyVbu.replaceAll("\"", "");
+						//log.info("companyVbu ----"+companyVbu);
+						//log.info("country---"+country);
+						//List<Long> drNamesList = null;
+						List<Long> drNamesList = null;
+						if(Validator.isNotNull(country)) {
+						
+							drNamesList = UserDetailsLocalServiceUtil.getDRListByVbu(type, country,companyVbu);
+					
+						List<User> users = new ArrayList<>();
+
+						JSONArray drNamesArray = JSONFactoryUtil.createJSONArray();
+						if (Validator.isNotNull(drNamesList)) {
+							if (Validator.isNotNull(drNamesList)) {
+								for (Long id : drNamesList) {
+									try {
+										users.add(DashboardUtil.getUserByJobTitle(String.valueOf(id)));
+									} catch (Exception e) {
+										e.printStackTrace();
+									}
+								}
+								//log.info("users from uplist----"+users);
+								List<User> sortedUsers=users.stream().sorted(Comparator.nullsFirst(Comparator.comparing(User::getFullName))).collect(Collectors.toList()); //sorting users and checking null values
+								//users = users.stream().sorted(Comparator.comparing(User::getFullName)).collect(Collectors.toList());     //sorting users based on fullname
+								//log.info("sorted users----"+sortedUsers);
+								sortedUsers.forEach(obj -> {
+									if (Validator.isNotNull(obj)) {
+										JSONObject object = JSONFactoryUtil.createJSONObject();
+										object.put("data", obj.getFullName());
+										object.put("k", obj.getJobTitle());
+										drNamesArray.put(object);
+
+									}
+								});
+								//log.info("drNamesArray--------"+drNamesArray);
+							}
+						}
+						jsonObject.put("drNamesList", drNamesArray);
+					//	log.info("dr names list----"+jsonObject);
+						}
+						//log.info("jsonobject of sorted users-------"+jsonObject);
+					} 
+					
+					else if(StringUtil.equalsIgnoreCase(action, "loadCompanyVBU")) {     //changes added related to load companyVBU based on country from userdetailslocalservice on AR dashboard page
+						String country=ParamUtil.getString(resourceRequest, "country", null);
+						//logger.info("country"+country);
+						if(Validator.isNotNull(country)) {
+							JSONArray recoarray=JSONFactoryUtil.createJSONArray();
+							JSONObject vbuObj=JSONFactoryUtil.createJSONObject();
+						List<String> VBUlist = null;
+						VBUlist=UserDetailsLocalServiceUtil.getCompanyRecoVBU(country);
+						if (Validator.isNotNull(VBUlist)) {
+							
+						for (String vbu : VBUlist) {
+								recoarray.put(vbu);
+								
+							}
+						}
+						
+						jsonObject.put("vbuList", recoarray);
+						//logger.info("vbuList"+recoarray);
+						
+						}
+						
+					}
+					
+					
+			else if (StringUtil.equalsIgnoreCase(action, "loadFilters")) {
+				
+						logger.info("inside loadFilters");
+						int type = ParamUtil.getInteger(resourceRequest, "type", 1);
+						String country = ParamUtil.getString(resourceRequest, "country", "India");
+						
+						
+						if (Validator.isBlank(country) || Validator.isNull(country)) {
+							country = "India";
+						}
+						if (country.equalsIgnoreCase("All")) {
+							country = null;
+						}
+						
+						try {
+							List<String> customerNames = UserDetailsLocalServiceUtil.getFilterData(employeeId, type,
+									UserDetailsFilterColumn.Customer_Name, country);
+							if (Validator.isNotNull(customerNames) && customerNames.size() > 0) {
+								Collections.sort(customerNames);
+								jsonObject.put("customerNames", EmployeeOwnershipUtilizationUtil.bridgeStringJSON(customerNames));
+	
+							}
+							List<String> performanceType = UserDetailsLocalServiceUtil.getFilterData(employeeId,
+									type, UserDetailsFilterColumn.PERFORMER_TYPE, country);
+							if (Validator.isNotNull(performanceType) && performanceType.size() > 0) {
+								Collections.sort(performanceType);
+								jsonObject.put("performanceType",
+										EmployeeOwnershipUtilizationUtil.bridgeStringJSON(performanceType));
+	
+							}
+							
+						
+							List<String> GradeArray = UserDetailsLocalServiceUtil.getFilterData(employeeId,
+									type, UserDetailsFilterColumn.CURRENT_GRADE, null);
+							if (Validator.isNotNull(GradeArray) && GradeArray.size() > 0) {
+								Collections.sort(GradeArray);
+								jsonObject.put("GradeArray",
+										EmployeeOwnershipUtilizationUtil.bridgeStringJSON(GradeArray));
+	
+							}
+							
+							List<String> project = UserDetailsLocalServiceUtil.getFilterData(employeeId,
+									type, UserDetailsFilterColumn.Project_Name, country);
+							if (Validator.isNotNull(project) && project.size() > 0) {
+								Collections.sort(project);
+								jsonObject.put("projectArray",
+										EmployeeOwnershipUtilizationUtil.bridgeStringJSON(project));
+	
+							}
+							
+							List<String> vbu = UserDetailsLocalServiceUtil.getFilterData(employeeId,
+									type, UserDetailsFilterColumn.COMP_RECO_VBU, country);
+							if (Validator.isNotNull(vbu) && vbu.size() > 0) {
+								Collections.sort(vbu);
+								jsonObject.put("vbuArray",
+										EmployeeOwnershipUtilizationUtil.bridgeStringJSON(vbu));
+	
+							}
+							
+							List<String> tenureInCurrentGrade = UserDetailsLocalServiceUtil.getFilterData(employeeId,
+									type, UserDetailsFilterColumn.TENURE_IN_CURRENT_GRADE, country);
+							if (Validator.isNotNull(tenureInCurrentGrade) && tenureInCurrentGrade.size() > 0) {
+								Collections.sort(tenureInCurrentGrade);
+								jsonObject.put("tenureInCurrentGradeArray",
+										EmployeeOwnershipUtilizationUtil.bridgeStringJSON(tenureInCurrentGrade));
+	
+							}
+						}catch(Exception e) {
+							logger.info(e.getStackTrace());
+						}
+						
+			}//end of if
+				}
+			}catch(Exception e) {
+				logger.info(e.getMessage());
+			}
+			PrintWriter printWriter = null;
+			try {
+				printWriter = resourceResponse.getWriter();
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+			resourceResponse.setContentType(ContentTypes.APPLICATION_JSON);
+			if (Validator.isNotNull(printWriter)) {
+				printWriter.println(jsonObject.toJSONString());
+			}
+			printWriter.close();
+		
+	     }
+	         super.serveResource(resourceRequest, resourceResponse);
+		}
+		
+	
+
+}
