@@ -1,0 +1,605 @@
+package com.zen.asr.portlet;
+
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.text.DecimalFormat;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import javax.portlet.Portlet;
+import javax.portlet.PortletException;
+import javax.portlet.RenderRequest;
+import javax.portlet.RenderResponse;
+import javax.portlet.ResourceRequest;
+import javax.portlet.ResourceResponse;
+
+import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Reference;
+
+import com.liferay.portal.kernel.json.JSONArray;
+import com.liferay.portal.kernel.json.JSONFactoryUtil;
+import com.liferay.portal.kernel.json.JSONObject;
+import com.liferay.portal.kernel.log.Log;
+import com.liferay.portal.kernel.log.LogFactoryUtil;
+import com.liferay.portal.kernel.model.User;
+import com.liferay.portal.kernel.portlet.bridges.mvc.MVCPortlet;
+import com.liferay.portal.kernel.theme.ThemeDisplay;
+import com.liferay.portal.kernel.util.ContentTypes;
+import com.liferay.portal.kernel.util.ParamUtil;
+import com.liferay.portal.kernel.util.StringUtil;
+import com.liferay.portal.kernel.util.Validator;
+import com.liferay.portal.kernel.util.WebKeys;
+import com.zen.asr.constants.DashboardConstants;
+import com.zen.asr.constants.ZenAsrDashboardPortletKeys;
+import com.zen.asr.util.DashboardUtil;
+
+import zen.me.portal.common.api.ZenMeRecommendationApi;
+import zen.me.service.constant.ManagerUpType;
+import zen.me.service.service.ManagerResponseLocalServiceUtil;
+import zen.me.service.service.UserDetailsLocalServiceUtil;
+
+/**
+ * @author AK51103
+ */
+@Component(immediate = true, property = { "com.liferay.portlet.display-category=category.sample",
+		"com.liferay.portlet.header-portlet-css=/css/main.css", "com.liferay.portlet.instanceable=true",
+		"javax.portlet.display-name=ZenAsrDashboard", "javax.portlet.init-param.template-path=/",
+		"javax.portlet.init-param.view-template=/dashboard/view.jsp",
+		"javax.portlet.name=" + ZenAsrDashboardPortletKeys.ZENASRDASHBOARD,
+		"javax.portlet.resource-bundle=content.Language",
+		"com.liferay.portlet.footer-portlet-javascript=/js/dashboard.js",
+		"com.liferay.portlet.footer-portlet-javascript=/js/highchart.js",
+		"javax.portlet.security-role-ref=power-user,user", "com.liferay.portlet.requires-namespaced-parameters=false",
+		"com.liferay.portlet.action-url-redirect=true" }, service = Portlet.class)
+public class ZenAsrDashboardPortlet extends MVCPortlet {
+
+	private static Log log = LogFactoryUtil.getLog(ZenAsrDashboardPortlet.class);
+	static DecimalFormat df = new DecimalFormat();
+
+	@Override
+	public void doView(RenderRequest renderRequest, RenderResponse renderResponse)
+			throws IOException, PortletException {
+		df.setMaximumFractionDigits(2);
+
+		super.doView(renderRequest, renderResponse);
+	}
+
+	@Override
+	public void serveResource(ResourceRequest resourceRequest, ResourceResponse resourceResponse)
+			throws IOException, PortletException {
+
+		ThemeDisplay themeDisplay = (ThemeDisplay) resourceRequest.getAttribute(WebKeys.THEME_DISPLAY);
+		if (themeDisplay.isSignedIn()) {
+			
+			
+			long employeeId = Long.parseLong(themeDisplay.getUser().getJobTitle());
+			try {
+				String action = ParamUtil.getString(resourceRequest, "action", null);
+				log.info("<<<  Action " + action);
+				JSONObject jsonObject = JSONFactoryUtil.createJSONObject();
+				if (Validator.isNotNull(action)) {
+					if (StringUtil.equalsIgnoreCase(action, "laodCountry")) {
+						List<String> countryList = DashboardUtil.getCountry(employeeId);
+						JSONArray countries = JSONFactoryUtil.createJSONArray();
+						if (Validator.isNotNull(countryList)) {
+							countryList.forEach(c -> {
+								countries.put(c);
+							});
+						}
+						jsonObject.put("countriesList", countries);
+
+					} else if (StringUtil.equalsIgnoreCase(action, "laodUPType")) {
+						String country = ParamUtil.getString(resourceRequest, "country", null);
+
+						long firstUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+								Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.FIRST_UP_MANSGER,
+								country);
+						long secounUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+								Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.SECOND_UP_MANSGER,
+								country);
+						long thirdUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+								Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.THIRD_UP_MANSGER,
+								country);
+						long fourthUpCount = UserDetailsLocalServiceUtil.getManagerUpCount(
+								Long.parseLong(themeDisplay.getUser().getJobTitle()), ManagerUpType.FOURTH_UP_MANSGER,
+								country);
+						JSONArray data = JSONFactoryUtil.createJSONArray();
+
+						JSONObject object = JSONFactoryUtil.createJSONObject();
+						object.put("key", 0);
+						object.put("data", "TR");
+
+						if (firstUpCount > 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							object.put("key", 1);
+							object.put("data", "1Up");
+							data.put(object);
+						}
+						if (secounUpCount > 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							object.put("key", 2);
+							object.put("data", "2Up");
+							data.put(object);
+						}
+
+						if (thirdUpCount > 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							object.put("key", 3);
+							object.put("data", "3Up");
+							data.put(object);
+						}
+						if (fourthUpCount > 0) {
+							object = JSONFactoryUtil.createJSONObject();
+							object.put("key", 4);
+							object.put("data", "4Up");
+							data.put(object);
+						}
+
+						List<Long> drNamesList = null;
+
+						if (data.length() != ManagerUpType.FIRST_UP_MANSGER) {
+							drNamesList = UserDetailsLocalServiceUtil.getDRNameList(data.length(),
+									Long.parseLong(themeDisplay.getUser().getJobTitle()), country);
+						}
+						List<User> users = new ArrayList<>();
+
+						JSONArray drNamesArray = JSONFactoryUtil.createJSONArray();
+						if (Validator.isNotNull(drNamesList)) {
+							if (Validator.isNotNull(drNamesList)) {
+								for (long id : drNamesList) {
+									try {
+										users.add(DashboardUtil.getUserByJobTitle(String.valueOf(id)));
+									} catch (Exception e) {
+										e.printStackTrace();
+									}
+								}
+								users = users.stream().sorted(Comparator.comparing(User::getFullName))
+										.collect(Collectors.toList());
+								users.forEach(obj -> {
+									if (Validator.isNotNull(obj)) {
+										JSONObject object1 = JSONFactoryUtil.createJSONObject();
+										object1.put("data", obj.getFullName());
+										object1.put("k", obj.getJobTitle());
+										drNamesArray.put(object1);
+
+									}
+								});
+							}
+						}
+						jsonObject.put("drNamesList", drNamesArray);
+						jsonObject.put("managerUPAccessArray", data);
+
+					} else if (StringUtil.equalsIgnoreCase(action, "loadUserDr")) {
+						int type = ParamUtil.getInteger(resourceRequest, "managerUp", 1);
+						String country = ParamUtil.getString(resourceRequest, "country", "India");
+						List<Long> drNamesList = null;
+
+						if (type != ManagerUpType.FIRST_UP_MANSGER) {
+							drNamesList = UserDetailsLocalServiceUtil.getDRNameList(type,
+									Long.parseLong(themeDisplay.getUser().getJobTitle()), country);
+						}
+						List<User> users = new ArrayList<>();
+
+						JSONArray drNamesArray = JSONFactoryUtil.createJSONArray();
+						if (Validator.isNotNull(drNamesList)) {
+							if (Validator.isNotNull(drNamesList)) {
+								for (long id : drNamesList) {
+									try {
+										users.add(DashboardUtil.getUserByJobTitle(String.valueOf(id)));
+									} catch (Exception e) {
+										e.printStackTrace();
+									}
+								}
+								users = users.stream().sorted(Comparator.comparing(User::getFullName))
+										.collect(Collectors.toList());
+								users.forEach(obj -> {
+									if (Validator.isNotNull(obj)) {
+										JSONObject object = JSONFactoryUtil.createJSONObject();
+										object.put("data", obj.getFullName());
+										object.put("k", obj.getJobTitle());
+										drNamesArray.put(object);
+
+									}
+								});
+							}
+						}
+						jsonObject.put("drNamesList", drNamesArray);
+
+					} else if (StringUtil.equalsIgnoreCase(action, "loadManagerDrByUsers")) {
+						int type = ParamUtil.getInteger(resourceRequest, "type", 1);
+						String country = ParamUtil.getString(resourceRequest, "country", "India");
+
+						List<String> managesIds = new ArrayList<>();
+						String managerUpIds = "";
+
+						managerUpIds = ParamUtil.getString(resourceRequest, "managerIds", null);
+
+						managerUpIds = _zenMeRecommendationApi.bridgeList(managerUpIds);
+						managesIds = Arrays.asList(managerUpIds.split(","));
+						List<Long> mgrIds = managesIds.stream().map(o -> Long.parseLong(o.replace("\"", "")))
+								.collect(Collectors.toList());
+						List<Long> drList = DashboardUtil.getManagerDr(mgrIds, type, country,null);
+
+						JSONArray drNamesArray = JSONFactoryUtil.createJSONArray();
+						List<User> users = new ArrayList<>();
+						if (Validator.isNotNull(drList)) {
+							if (Validator.isNotNull(drList)) {
+								for (long id : drList) {
+									try {
+										users.add(DashboardUtil.getUserByJobTitle(String.valueOf(id)));
+									} catch (Exception e) {
+										e.printStackTrace();
+									}
+								}
+							}
+							users = users.stream().sorted(Comparator.comparing(User::getFullName))
+									.collect(Collectors.toList());
+							users.forEach(obj -> {
+								if (Validator.isNotNull(obj)) {
+									JSONObject object = JSONFactoryUtil.createJSONObject();
+									object.put("data", obj.getFullName());
+									object.put("k", obj.getJobTitle());
+									drNamesArray.put(object);
+
+								}
+							});
+						}
+						jsonObject.put("drNamesList", drNamesArray);
+					} else if (StringUtil.equalsIgnoreCase(action, "loadGraph")) {
+						int type = ParamUtil.getInteger(resourceRequest, "type", 1);
+						String country = ParamUtil.getString(resourceRequest, "country", "India");
+						String companyVBU = ParamUtil.getString(resourceRequest, "vbu", null);
+						String upIds = null;
+						List<Long> statusIds = new ArrayList<Long>();
+						String pendingCases = ParamUtil.getString(resourceRequest, "pendingCases", null);
+						List<Long> managerComplCase=null;
+						log.info("pendingCases"+pendingCases);
+						
+						String firstUpIds = ParamUtil.getString(resourceRequest, "firstUpIds", null);
+
+						String twoUpIds = ParamUtil.getString(resourceRequest, "twoUpIds", null);
+						String thirdtUpIds = ParamUtil.getString(resourceRequest, "thirdtUpIds", null);
+						try {
+							firstUpIds = firstUpIds.substring(1, firstUpIds.length() - 1).replaceAll("\"", "");
+							twoUpIds = twoUpIds.substring(1, twoUpIds.length() - 1).replaceAll("\"", "");
+							thirdtUpIds = thirdtUpIds.substring(1, thirdtUpIds.length() - 1).replaceAll("\"", "");
+						} catch (Exception e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
+						String customers = ParamUtil.getString(resourceRequest, "customerName", null);
+						customers = customers.substring(1, customers.length() - 1).replaceAll("\"", "");
+						List<String> customerList = null;
+						if (Validator.isNotNull(customers) && customers.length() > 0) {
+							customerList = Arrays.asList(customers.split(","));
+						//	log.info("customerList>>>>"+customerList);
+						}
+						String projects = ParamUtil.getString(resourceRequest, "projectName", null);
+						projects = projects.substring(1, projects.length() - 1).replaceAll("\"", "");
+						List<String> projectList = null;
+						if (Validator.isNotNull(projects) && projects.length() > 0) {
+							projectList = Arrays.asList(projects.split(","));
+						//	log.info("projectList>>>>"+projectList);
+						}
+						String practices = ParamUtil.getString(resourceRequest, "practiceName", null);
+						practices = practices.substring(1, practices.length() - 1).replaceAll("\"", "");
+						List<String> practiceList = null;
+						if (Validator.isNotNull(practices) && practices.length() > 0) {
+							practiceList = Arrays.asList(practices.split(","));
+							log.info("practiceList>>>>"+practiceList);
+						}
+						String performance = ParamUtil.getString(resourceRequest, "performance", null);
+						performance = performance.substring(1, performance.length() - 1).replaceAll("\"", "");
+						List<String> performanceList = null;
+						if (Validator.isNotNull(performance) && performance.length() > 0) {
+							performanceList = Arrays.asList(performance.split(","));
+						}
+						String tenures = ParamUtil.getString(resourceRequest, "tenures", null);
+						tenures = tenures.substring(1, tenures.length() - 1).replaceAll("\"", "");
+						List<String> tenuresList = null;
+						if (Validator.isNotNull(tenures) && tenures.length() > 0) {
+							tenuresList = Arrays.asList(tenures.split(","));
+						}
+						String grades = ParamUtil.getString(resourceRequest, "grades", null);
+						grades = grades.substring(1, grades.length() - 1).replaceAll("\"", "");
+						List<String> gradesList = null;
+						if (Validator.isNotNull(grades) && grades.length() > 0) {
+							gradesList = Arrays.asList(grades.split(","));
+						}
+						String ttct = ParamUtil.getString(resourceRequest, "ttct", null).replaceAll("\"", "");
+						List<String> ttctList = null;
+						if (Validator.isNotNull(ttct) && ttct.length() > 0 && (!ttct.contains("all"))) {
+							ttctList = Arrays.asList(ttct.split(","));
+						}
+						
+						String top100 = ParamUtil.getString(resourceRequest, "top100", null).replaceAll("\"", "");
+						List<String> top100List = null;
+						if (Validator.isNotNull(top100) && top100.length() > 0 && (!top100.contains("all"))) {
+							top100List = Arrays.asList(top100.split(","));
+						}
+						
+						String ct = ParamUtil.getString(resourceRequest, "ct", null).replaceAll("\"", "");
+						List<String> ctList = null;
+						if (Validator.isNotNull(ct) && ct.length() > 0 && (!ct.contains("all"))) {
+							ctList = Arrays.asList(ct.split(","));
+						}
+						
+						String gender = ParamUtil.getString(resourceRequest, "gender", null).replaceAll("\"", "");
+						List<String> genderList = null;
+						if (Validator.isNotNull(gender) && gender.length() > 0 && (!gender.contains("all"))) {
+							genderList = Arrays.asList(gender.split(","));
+						}
+						
+						String nicheSkill = ParamUtil.getString(resourceRequest, "nicheSkill", null);
+						List<String> nicheSkillList = null;
+						if (Validator.isNotNull(nicheSkill) && nicheSkill.length() > 0
+								&& (!nicheSkill.contains("all"))) {
+							nicheSkillList = Arrays.asList(nicheSkill.split(","));
+						}
+
+						if (Validator.isNotNull(thirdtUpIds) && thirdtUpIds.length() > 0) {
+							upIds = thirdtUpIds;
+							type = ManagerUpType.THIRD_UP_MANSGER;
+						}
+
+						if (Validator.isNotNull(twoUpIds) && twoUpIds.length() > 0) {
+							upIds = twoUpIds;
+							type = ManagerUpType.SECOND_UP_MANSGER;
+						}
+						if (Validator.isNotNull(firstUpIds) && firstUpIds.length() > 0) {
+							upIds = firstUpIds;
+							type = ManagerUpType.FIRST_UP_MANSGER;
+						}
+
+						int count = 0;
+						
+						if(Validator.isNotNull(country)) {
+						List<Long> managerIds = new ArrayList<>();
+						if (Validator.isNotNull(upIds) && upIds.length() > 0) {
+							managerIds = Stream.of(upIds.split(",")).map(Long::parseLong).collect(Collectors.toList());
+						} else {
+							managerIds.add(Long.parseLong(themeDisplay.getUser().getJobTitle()));
+							//managerIds = UserDetailsLocalServiceUtil.getDRListByVbu(type, country,companyVBU);
+
+						}
+						
+						  if(pendingCases.equalsIgnoreCase("Yes"))
+						  { 
+							  managerComplCase=ManagerResponseLocalServiceUtil.getManagerListByCompletedCase(type, country, pendingCases,managerIds); 
+					
+						  }
+						 
+						List<Object> userIds = DashboardUtil.getManagersUserList(type, managerIds, country,companyVBU,
+								performanceList, tenuresList, gradesList, ttctList, nicheSkillList,ctList,genderList,projectList,customerList,practiceList,managerComplCase,top100List);
+						
+						 if(pendingCases.equalsIgnoreCase("No"))
+						  { 
+							  managerComplCase=ManagerResponseLocalServiceUtil.getManagerListByCompletedCase(type, country, pendingCases,managerIds);
+							 List<Long> userList = new ArrayList<>(userIds.size());
+							 for(Object obj : userIds){
+								 userList.add((Long) obj);
+							 }
+							 userList.removeAll(managerComplCase);
+							 userIds = DashboardUtil.getManagersUserList(type, managerIds, country,companyVBU,
+										performanceList, tenuresList, gradesList, ttctList, nicheSkillList,ctList,genderList,projectList,customerList,practiceList,userList,top100List);
+						  }
+						
+						 
+						if (Validator.isNotNull(userIds) && (!userIds.isEmpty())) {
+							count = userIds.size();
+						}
+
+						JSONObject graphFirst = DashboardUtil.getManagerReco(managerIds, type, userIds,
+								DashboardConstants.FILETR_TYPE_INCREMENT_RECO);
+						JSONArray inLackValue = graphFirst.getJSONArray("inLackJson");
+						JSONArray inParValue = graphFirst.getJSONArray("inPerJson");
+
+						jsonObject.put("trManagerRecoInLack", inLackValue);
+						jsonObject.put("trManagerRecoInPer", inParValue);
+
+						graphFirst = DashboardUtil.getManagerReco(managerIds, type, userIds,
+								DashboardConstants.FILETR_TYPE_PERFORMANCE_CATEGORY);
+						inLackValue = graphFirst.getJSONArray("inLackJson");
+						inParValue = graphFirst.getJSONArray("inPerJson");
+
+						jsonObject.put("performanceCategoriesData", inLackValue);
+						jsonObject.put("performanceCategoriesDataPer", inParValue);
+
+						graphFirst = DashboardUtil.getManagerReco(managerIds, type, userIds,
+								DashboardConstants.FILETR_TYPE_MANAGER_RECO_PER);
+						jsonObject.put("mgrTrRecoPer", graphFirst.get("mgrTrRecoPer"));
+
+						graphFirst = DashboardUtil.getManagerReco(managerIds, type, userIds,
+								DashboardConstants.FILETR_TYPE_MANAGER_GRADE_PER);
+						jsonObject.put("mgrTrGradeRecoPer", graphFirst.get("mgrTrRecoPer"));
+
+						jsonObject.put("currentSalaryVsProSalaryCount",
+								DashboardUtil.getTRvsManagerDeviationRangeCount(managerIds, type, userIds, country)
+										.get("currentSalaryVsProSalaryCount"));
+
+						List<Object> grds = DashboardUtil.getCurrentGrade(userIds);
+						JSONArray gradeCategories = JSONFactoryUtil.createJSONArray();
+						if (Validator.isNotNull(grds)) {
+							for (Object object : grds) {
+								gradeCategories.put(object.toString());
+							}
+						}
+						jsonObject.put("gradeCategories", gradeCategories.toJSONString());
+						jsonObject.put("headCount", count);
+							}
+							
+					}else if(StringUtil.equalsIgnoreCase(action, "loadCompanyVBU")) {     //changes added related to load companyVBU based on country from userdetailslocalservice on AR dashboard page
+						String country=ParamUtil.getString(resourceRequest, "country", null);
+						//log.info("country selected for vbu from ardashboard----"+country);
+						if(Validator.isNotNull(country)) {
+							JSONArray recoarray=JSONFactoryUtil.createJSONArray();
+							JSONObject vbuObj=JSONFactoryUtil.createJSONObject();
+						List<String> VBUlist = null;
+						VBUlist=	UserDetailsLocalServiceUtil.getCompanyRecoVBU(country);
+					//	log.info("vbulist>>>>>"+VBUlist);
+						
+						if (Validator.isNotNull(VBUlist)) {
+							
+						for (String vbu : VBUlist) {
+							//	log.info("vbu>>>>"+vbu);	
+								recoarray.put(vbu);
+								
+							}
+						//log.info("recoarray>>>>>>"+recoarray);
+						}
+						
+						jsonObject.put("vbuList", recoarray);
+						//log.info("vbuobj>>>>>"+jsonObject);
+						
+						
+						
+						}
+						
+					}else if(StringUtil.equalsIgnoreCase(action, "loadProjectAndCustomerName")) {     //changes added related to load companyVBU based on country from userdetailslocalservice on AR dashboard page
+						String country=ParamUtil.getString(resourceRequest, "country", null);
+					String companyVbu=ParamUtil.getString(resourceRequest, "companyvbu", null);
+						int type=ParamUtil.getInteger(resourceRequest, "type",4);
+						//companyVbu=companyVbu.replaceAll("\"", "");
+						log.info("Action>>>"+action);
+						
+						String upIds = "";
+						String firstUpIds = ParamUtil.getString(resourceRequest, "firstUpIds", null);
+
+						String twoUpIds = ParamUtil.getString(resourceRequest, "twoUpIds", null);
+						String thirdtUpIds = ParamUtil.getString(resourceRequest, "thirdtUpIds", null);
+						//String fourthUpIds = ParamUtil.getString(resourceRequest, "fourthUpIds", null);
+						try {
+							firstUpIds = firstUpIds.substring(1, firstUpIds.length() - 1).replaceAll("\"", "");
+							
+							twoUpIds = twoUpIds.substring(1, twoUpIds.length() - 1).replaceAll("\"", "");
+							
+							thirdtUpIds = thirdtUpIds.substring(1, thirdtUpIds.length() - 1).replaceAll("\"", "");
+							
+						//	fourthUpIds = fourthUpIds.substring(1, fourthUpIds.length() - 1).replaceAll("\"", "");
+
+						} catch (Exception e) {
+							// TODO Auto-generated catch block
+							e.printStackTrace();
+						}
+      // log.info("inside project and customer name load firstUpIds---"+firstUpIds+"twoUpIds-------"+twoUpIds+"thirdtUpIds------"+thirdtUpIds+"fourthUpIds---"+fourthUpIds);
+						
+		//			log.info("data selected from ardashboard"+country+">>>>>vbu>>>>"+companyVbu);
+
+			//			log.info("type from js page---"+type);
+//						if (Validator.isNotNull(fourthUpIds) && fourthUpIds.length() > 0) {
+//							//upIds += thirdtUpIds + ",";
+//							upIds = fourthUpIds ;
+//							type = ManagerUpType.FOURTH_UP_MANSGER;
+//						}
+						if (Validator.isNotNull(thirdtUpIds) && thirdtUpIds.length() > 0) {
+							//upIds += thirdtUpIds + ",";
+							upIds = thirdtUpIds ;
+						   type = ManagerUpType.THIRD_UP_MANSGER;
+						}
+
+						if (Validator.isNotNull(twoUpIds) && twoUpIds.length() > 0) {
+							upIds = twoUpIds ;
+							type = ManagerUpType.SECOND_UP_MANSGER;
+						}
+						if (Validator.isNotNull(firstUpIds) && firstUpIds.length() > 0) {
+							upIds = firstUpIds ;
+							type = ManagerUpType.FIRST_UP_MANSGER;
+						}
+						
+						
+						if(Validator.isNotNull(country)) {
+						
+							JSONArray projectNamesArray=JSONFactoryUtil.createJSONArray();
+							JSONArray customerNamesArray=JSONFactoryUtil.createJSONArray();
+							JSONArray practiceNamesArray=JSONFactoryUtil.createJSONArray();
+							List<Long> managerIds=new ArrayList<Long>();
+							List<String> projectNameList = null;
+							List<String> customerNameList = null;
+							List<String> practiceNameList = null;
+							
+							if(Validator.isNull(upIds)&& upIds.length()==0) {
+								managerIds = UserDetailsLocalServiceUtil.getDRListByVbu(type, country,companyVbu);
+							}
+							else {
+							 managerIds.add(Long.parseLong(upIds));
+
+							}
+//							log.info("managerList based inside loadcustomer & project name>>>>"+managerIds);
+//							log.info("country based inside loadcustomer & project name>>>>"+country+">>companyVbu>"+companyVbu+">>>type"+type);
+//							
+						projectNameList=UserDetailsLocalServiceUtil.getProjectName(country,companyVbu,type,managerIds,ManagerUpType.PROJECT_NAME);
+						Collections.sort(projectNameList);
+						customerNameList=UserDetailsLocalServiceUtil.getCustomerName(country,companyVbu,type,managerIds,ManagerUpType.CUSTOMER_NAME);
+                      Collections.sort(customerNameList);
+                      practiceNameList=UserDetailsLocalServiceUtil.getPracticeName(country,companyVbu,type,managerIds,ManagerUpType.EmployeeOwnership_NAME);
+                      //log.info("practiceNameList"+practiceNameList);
+						Collections.sort(practiceNameList);
+						if (Validator.isNotNull(projectNameList)) {
+							
+						for (String project : projectNameList) {
+								//log.info("project>>>>"+project);	
+								projectNamesArray.put(project);
+								
+							}
+						//log.info("projectNamesArray>>>>>>"+projectNamesArray);
+						}
+						if (Validator.isNotNull(customerNameList)) {
+							
+							for (String customer : customerNameList) {
+									//log.info("customer>>>>"+customer);	
+									customerNamesArray.put(customer);
+									
+								}
+							//log.info("customerNamesArray>>>>>>"+customerNamesArray);
+							}
+						
+						if (Validator.isNotNull(practiceNameList)) {
+							
+							for (String practice : practiceNameList) {
+									//log.info("project>>>>"+project);	
+								practiceNamesArray.put(practice);
+									
+								}
+							//log.info("projectNamesArray>>>>>>"+projectNamesArray);
+							}
+						jsonObject.put("projectsList", projectNamesArray);
+						jsonObject.put("customersList", customerNamesArray);
+						jsonObject.put("practiceList", practiceNamesArray);
+						//log.info("listobj>>>>>"+jsonObject);
+						
+						
+						
+						}
+						
+					}
+
+				}
+				PrintWriter printWriter = null;
+				try {
+					printWriter = resourceResponse.getWriter();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+				resourceResponse.setContentType(ContentTypes.APPLICATION_JSON);
+				if (Validator.isNotNull(printWriter)) {
+					printWriter.println(jsonObject.toJSONString());
+				}
+				printWriter.close();
+			} catch (Exception e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+
+		}
+
+	}
+
+	@Reference
+	private ZenMeRecommendationApi _zenMeRecommendationApi;
+
+}
